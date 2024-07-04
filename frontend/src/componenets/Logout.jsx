@@ -1,10 +1,11 @@
 import React from 'react'
 import { CiLogout } from "react-icons/ci";
-const Logout = () => {
+const Logout = ({userProfile}) => {
   return (
     <>
-    <img src={"https://ps.w.org/user-avatar-reloaded/assets/icon-256x256.png?rev=2540745"}
-    className='w-10 h-10 rounded-full border border-gray-800' />
+    <a href={userProfile?.html_url} target='_blank' rel='noreferrer'>
+    <img src={userProfile?.avatar_url} className=' w-10 h-10 rounded-full mb-2 border border-gray-800' alt='' />
+    </a>
 
 
     <div className='cursor-pointer flex items-center p-2 border-spacing-1 border-gray-500 last:rounded-lg bg-glass mt-auto'>
