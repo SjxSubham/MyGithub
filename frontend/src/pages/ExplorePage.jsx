@@ -1,13 +1,13 @@
 import React from 'react'
 import toast from 'react-hot-toast';
 import { useState } from 'react';
-import Spinner from '../componenets/Spinner';
-import Repos from '../componenets/Repos';
+import Spinner from '../components/Spinner';
+import Repos from '../components/Repos';
 
 const ExplorePage = () => {
   const [loading,setLoading] = useState(false);
   const [repos, setRepos] = useState([]);
-  const [selectedLanguage, setSelectedLanguage] = useState('javascript'); // Default language
+  const [selectedLanguage, setSelectedLanguage] = useState(""); // Default language
   
   
   
@@ -15,13 +15,9 @@ const ExplorePage = () => {
     setLoading(true);
     setRepos([]);
     try {
-       const res = await fetch(`https://api.github.com/search/repositories?q=language:${language}&sort=stars&order=desc&per_page=10`, {
-        headers: {
-          authorization: `token ${import.meta.env.VITE_GITHUB_API_TOKEN}` // Vite env variable
-        }
-       });
-       const data = await res.json();
-        setRepos(data.items); 
+      const res = await fetch(`http://localhost:5000/api/explore/repos/${language}`);
+      const {repos} = await res.json();
+        setRepos(repos); 
         setSelectedLanguage(language);
 
     } catch (error) {
@@ -30,7 +26,7 @@ const ExplorePage = () => {
     finally {
       setLoading(false);
     }
-  }
+  };
 
   
   return (
@@ -54,13 +50,13 @@ const ExplorePage = () => {
             onClick={() => exploreRepos('c++')}
           />
           <img src='/javascript.svg' alt='JavaScript Logo' className='h-11 sm:h-20 cursor-pointer' 
-            onClick={() => exploreRepos('javascript')}
+            onClick={() => exploreRepos("javascript")}
           />
            <img src='/rust.svg' alt='Rust Logo' className='h-11 sm:h-20 cursor-pointer' 
             onClick={() => exploreRepos('rust')}
           />
           <img src='/go.svg' alt='Go Logo' className='h-11 sm:h-20 cursor-pointer' 
-            onClick={() => exploreRepos('go')}
+            onClick={() => exploreRepos('goLang')}
           />
          
           

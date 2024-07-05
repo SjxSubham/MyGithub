@@ -1,34 +1,31 @@
 import React, { useEffect, useState, useCallback  } from 'react'
 import { toast } from 'react-hot-toast'
-import Search from '../componenets/Search'
-import SortRepos from '../componenets/SortRepos'
-import ProfileInfo from '../componenets/ProfileInfo'
-import Repos from '../componenets/Repos'
-import Spinner from '../componenets/Spinner'
+import Search from '../components/Search'
+import SortRepos from '../components/SortRepos'
+import ProfileInfo from '../components/ProfileInfo'
+import Repos from '../components/Repos'
+import Spinner from '../components/Spinner'
 
 const Homepage = () => {
   const [userProfile, setUserProfile] = useState(null)
   const [repos, setRepos] = useState([])
-  const[loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   const [sortType, setSortType] = useState("recent")
   
   const getUserProfileAndRepos = useCallback(async (username="sjxsubham") => {
     setLoading(true);
     try {
-      const userRes = await fetch(`https://api.github.com/users/${username}`, {
-        headers: {
-          authorization: `token ${import.meta.env.VITE_GITHUB_API_TOKEN}`,        },
-      });
-      const userProfile = await userRes.json()
-      setUserProfile(userProfile);
 
-      const repoRes = await fetch(userProfile.repos_url);
-      const repos = await repoRes.json();
+      const res = await fetch(`http://localhost:5000/api/users/profile/${username}`);
+      const {repos,userProfile} = await res.json();
+      console.log(userProfile,"userProfile");
+
+      
       repos.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
       setRepos(repos);
-      
-      return {userProfile,repos}
+      setUserProfile(userProfile);
+      return {userProfile,repos};
      
 
     } catch (error) {

@@ -6,7 +6,7 @@ import SignUpPage from "./pages/SignUpPage";
 import ExplorePage from "./pages/ExplorePage";
 import LikesPage from "./pages/LikesPage";
 
-import Sidebar from './componenets/Sidebar';
+import Sidebar from './components/Sidebar';
 
 function App() {
   
