@@ -17,7 +17,7 @@ const Homepage = () => {
     setLoading(true);
     try {
 
-      const res = await fetch(`http://localhost:5000/api/users/profile/${username}`);
+      const res = await fetch(`/api/users/profile/${username}`);
       const {repos,userProfile} = await res.json();
       console.log(userProfile,"userProfile");
 

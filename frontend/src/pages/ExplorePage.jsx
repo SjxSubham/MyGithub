@@ -15,7 +15,7 @@ const ExplorePage = () => {
     setLoading(true);
     setRepos([]);
     try {
-      const res = await fetch(`http://localhost:5000/api/explore/repos/${language}`);
+      const res = await fetch(`/api/explore/repos/${language}`);
       const {repos} = await res.json();
         setRepos(repos); 
         setSelectedLanguage(language);
@@ -56,7 +56,7 @@ const ExplorePage = () => {
             onClick={() => exploreRepos('rust')}
           />
           <img src='/go.svg' alt='Go Logo' className='h-11 sm:h-20 cursor-pointer' 
-            onClick={() => exploreRepos('goLang')}
+            onClick={() => exploreRepos('go')}
           />
          
           
