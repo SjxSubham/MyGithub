@@ -7,9 +7,7 @@ const {language} = req.params;
         }, // Vite env variable
         
        });
-       if (!response.ok) {
-        throw new Error(`GitHub API responded with status ${response.status}`);
-      }
+     
        const data = await response.json();
        
         res.status(200).json({repos: data.items});
