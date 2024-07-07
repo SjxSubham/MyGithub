@@ -46,7 +46,7 @@ export const likeProfile = async (req, res) => {
 
         // await userToLike.save();
         // await user.save();
-        await Promise.all(userToLike.save(), user.save());
+        await Promise.all([userToLike.save(), user.save()]);
         res.status(200).json({message: "User Liked "});
 
     } catch (error) {
