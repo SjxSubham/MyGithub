@@ -1,47 +1,56 @@
-MyGithub: Explore GitHub in a Whole New Way! 🚀
-Overview
+# MyGithub: Explore GitHub in a Whole New Way! 
+### Overview
 MyGithub is a web application that brings the power of GitHub to your fingertips. Whether you’re a developer, a curious learner, or a seasoned open-source enthusiast, MyGithub offers a seamless experience for exploring user profiles, repositories, and more.
 
-Features
-Authentication & Authorization:
-Secure login using Passport.js with GitHub Auth.
-User sessions and tokens handled behind the scenes.
-GitHub API Integration:
-Fetch user profiles and repositories directly from GitHub.
-Real-time data sync with GitHub.
-Client-Side Repo Filtering:
-Filter repositories right on the client side.
-Find relevant repos faster.
-Robust Error Handling:
-Comprehensive error handling on both server and client sides.
-No more mysterious bugs!
-User Interaction:
-Like profiles, sign up, and log in.
-Clone repositories.
-Explore popular repos by username.
-Tech Stack
-Frontend:
-React (with hooks)
-Tailwind CSS for styling
-Backend:
-Node.js with Express.js
-MongoDB for data storage
-Getting Started
-Clone this repository:
-git clone https://github.com/yourusername/mygithub.git
+### Features
+###### 1.Authentication & Authorization:
+- Secure login using Passport.js with GitHub Auth.
+- User sessions and tokens handled behind the scenes.
+###### 2.GitHub API Integration:
+- Fetch user profiles and repositories directly from GitHub.
+- Real-time data sync with GitHub.
+###### 3.Client-Side Repo Filtering:
+- Filter repositories right on the client side.
+- Find relevant repos faster.
+###### 4.Robust Error Handling:
+- Comprehensive error handling on both server and client sides.
+- No more mysterious bugs!
+###### 5.User Interaction:
+- Like profiles, sign up, and log in, see the users along with date who liked ur profile.
+- Clone repositories.
+- Explore popular repos by username.
+- Explore popular repos of **Popular Languages**
 
-Install dependencies:
+  
+### Tech Stack
+##### Frontend:
+[x] React (with hooks)
+[x] Tailwind CSS for styling
+##### Backend:
+[x] Node.js with Express.js
+[x] MongoDB for data storage
+[x] Passport JS for Authentication
+
+### Check out MyGithub here: [MyGithub App](https://mygithubapp.onrender.com)
+
+### Getting Started
+ 1. Clone this repository:
+```git clone https://github.com/yourusername/mygithub.git```
+
+ 2. Install dependencies:
+```
 cd mygithub
 npm install
+```
+ 3. Set up environment variables (e.g. GitHub API keys, MongoDB URI, CLient Base URL).
+     
+ 4. Run the app:
+```npm start```
 
-Set up environment variables (e.g., GitHub API keys).
-Run the app:
-npm start
+### Contributing
+**Contributions are welcome!** *Feel free to open issues or submit pull requests.*
 
-Contributing
-Contributions are welcome! Feel free to open issues or submit pull requests.
+### License
+This project is licensed under the **[MIT License](MyGithub/LICENSE)**. See the LICENSE file for details.
 
-License
-This project is licensed under the MIT License. See the LICENSE file for details.
 
-Feel free to customize this README further to match your project’s style and specifics. Happy coding!
