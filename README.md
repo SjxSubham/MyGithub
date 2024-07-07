@@ -29,7 +29,7 @@ MyGithub is a web application that brings the power of GitHub to your fingertips
 ##### Backend:
 * Node.js with Express.js
 * MongoDB for data storage
-* Passport JS for Authentication
+* Passport.js for Authentication
 
 ## Check out MyGithub here: [MyGithub App](https://mygithubapp.onrender.com) 
 
