@@ -39,7 +39,7 @@ export const likeProfile = async (req, res) => {
 
         }
         if(user.likedProfiles.includes(userToLike.username)){
-            return res.status(400).json({ error: "Already Liked !!"})
+            return res.status(400).json({ error: "Already Liked !!"});
         }
         userToLike.likedBy.push({username:user.username, avatarUrl: user.avatarUrl, likedDate:Date.now()});
         user.likedProfiles.push(userToLike.username);

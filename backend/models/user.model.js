@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema({
     },
     name: {
         type: String,
-        default: ""
+        default: "",
     },
     profileUrl:{
         type: String,
@@ -19,7 +19,7 @@ const userSchema = new mongoose.Schema({
     },
     likedProfiles:{
         type:[String],
-        defaulr:[],
+        default:[],
     },
     likedBy:[
         {
@@ -32,7 +32,7 @@ const userSchema = new mongoose.Schema({
             },
             likedDate:{
                 type:Date,
-                default:Date.new
+                default:Date.now,
             }
         }
     ]
