@@ -31,7 +31,7 @@ MyGithub is a web application that brings the power of GitHub to your fingertips
 * MongoDB for data storage
 * Passport JS for Authentication
 
-## Check out MyGithub here: [MyGithub App](https://mygithubapp.onrender.com) <link rel="icon" type="image/svg+xml" href="<?xml version="1.0" encoding="UTF-8"?>
+## Check out MyGithub here: [MyGithub App](https://mygithubapp.onrender.com) 
 <svg version="1.1" viewBox="0 0 1024 1024" width="1280" height="1280" xmlns="http://www.w3.org/2000/svg">
 <path transform="translate(0)" d="m0 0h1024v1024h-1024z" fill="#1D1B1C"/>
 <path transform="translate(518,136)" d="m0 0 4 5 16 27 17 29 10 17 39 65 17 28 42 70 19 32 17 28 9 15 13 22-1 6-11 20h-2l-11-19-6-10-13-22-17-29-8-13-17-29-17-28-15-25-34-56-13-21-14-23-15-24-8-14-2-1-2 5-26 42-14 23-10 16-12 19-13 21-14 22-17 28-15 24-12 20-16 26-10 17-10 16-14 23-3 5-3-1-10-17 1-6 8-14 51-84 12-20 10-16 17-28 13-21 18-30 34-56 16-27 17-29z" fill="#FCFBFC"/>
