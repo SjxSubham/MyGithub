@@ -24,8 +24,8 @@ MyGithub is a web application that brings the power of GitHub to your fingertips
   
 ### Tech Stack
 ##### Frontend:
-[x] React (with hooks)
-[x] Tailwind CSS for styling
+[x]React (with hooks)
+[x]Tailwind CSS for styling
 ##### Backend:
 [x] Node.js with Express.js
 [x] MongoDB for data storage
