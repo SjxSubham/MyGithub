@@ -21,11 +21,11 @@ const LikeProfile = ({userProfile}) => {
     };
     if(!authUser || isOwnProfile) return null;
   return (
-   <buttomn className='bg-glass font-medium w-full text-xs p-2 rounded-md cursor-pointer border border-red-400 flex items-center gap-2'
+   <button className='bg-glass font-medium w-full text-xs p-2 rounded-md cursor-pointer border border-red-400 flex items-center gap-2'
    onClick = {handleLikeProfile}
    >
     <FaHeart size={16}/> Like 
-   </buttomn>
+   </button>
   )
 }
 
