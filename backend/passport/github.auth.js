@@ -25,15 +25,16 @@ passport.use(new GitHubStrategy({
   },
   async function(accessToken, refreshToken, profile, done) {
     // asynchronous verification, for effect...
+try{
 const user = await User.findOne({username: profile.username});
 if(!user){
     const newUser = new User({
         name: profile.displayName,
         username: profile.username,
         profileUrl: profile.profileUrl,
-        avaterUrl: profile.photos[0].value,
-        likedProfiles:[],
-        likedBy:[],
+        avatarUrl: profile.photos[0].value,
+        likedProfiles: [],
+        likedBy: [],
     })
     await newUser.save();
     done(null, newUser);
@@ -41,6 +42,10 @@ if(!user){
 }
 else{
     done(null, user)
+}
+}
+catch(error){
+  done(error);
 }
   }
 ));

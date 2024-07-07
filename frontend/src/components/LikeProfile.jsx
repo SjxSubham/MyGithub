@@ -1,5 +1,5 @@
 import React from 'react'
-import toast from 'react-hot-toast';
+import {toast} from 'react-hot-toast';
 import { FaHeart } from "react-icons/fa";
 import { useAuthContext } from '../context/Auth.Context';
 const LikeProfile = ({userProfile}) => {
@@ -7,7 +7,7 @@ const LikeProfile = ({userProfile}) => {
     const isOwnProfile = authUser?.username === userProfile.login;
         const handleLikeProfile = async () => {
             try {
-                const res = await fetch(`/api/users/likes/${userProfile.login}`, {
+                const res = await fetch(`/api/users/like/${userProfile.login}`, {
                     method: "POST",
                     credentials: "include",
                 });                                 
