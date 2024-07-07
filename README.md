@@ -3,19 +3,19 @@
 MyGithub is a web application that brings the power of GitHub to your fingertips. Whether you’re a developer, a curious learner, or a seasoned open-source enthusiast, MyGithub offers a seamless experience for exploring user profiles, repositories, and more.
 
 ### Features
-###### 1.Authentication & Authorization:
+###### 1. Authentication & Authorization:
 - Secure login using Passport.js with GitHub Auth.
 - User sessions and tokens handled behind the scenes.
-###### 2.GitHub API Integration:
+###### 2. GitHub API Integration:
 - Fetch user profiles and repositories directly from GitHub.
 - Real-time data sync with GitHub.
-###### 3.Client-Side Repo Filtering:
+###### 3. Client-Side Repo Filtering:
 - Filter repositories right on the client side.
 - Find relevant repos faster.
-###### 4.Robust Error Handling:
+###### 4. Robust Error Handling:
 - Comprehensive error handling on both server and client sides.
 - No more mysterious bugs!
-###### 5.User Interaction:
+###### 5. User Interaction:
 - Like profiles, sign up, and log in, see the users along with date who liked ur profile.
 - Clone repositories.
 - Explore popular repos by username.
@@ -24,12 +24,12 @@ MyGithub is a web application that brings the power of GitHub to your fingertips
   
 ### Tech Stack
 ##### Frontend:
-[x]React (with hooks)
-[x]Tailwind CSS for styling
+* React (with hooks)
+* Tailwind CSS for styling
 ##### Backend:
-[x] Node.js with Express.js
-[x] MongoDB for data storage
-[x] Passport JS for Authentication
+* Node.js with Express.js
+* MongoDB for data storage
+* Passport JS for Authentication
 
 ### Check out MyGithub here: [MyGithub App](https://mygithubapp.onrender.com)
 
