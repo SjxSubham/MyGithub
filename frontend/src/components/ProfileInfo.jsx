@@ -99,7 +99,7 @@ const ProfileInfo = ({userProfile}) => {
 				{/* Email Address */}
 				{userProfile?.email && (
 					<div className='my-2'>
-						<p href={`mailto:${userProfile.email}`}
+						<p href={`mailto:${userProfile.email}.com`}
 						target='_blank'
 						rel='noreferrer'className='text-gray-600 font-bold text-sm'>Email address</p>
 						<p className=''>
