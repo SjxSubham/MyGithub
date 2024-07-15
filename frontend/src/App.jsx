@@ -8,6 +8,7 @@ import LikesPage from "./pages/LikesPage";
 
 import Sidebar from './components/Sidebar';
 import { useAuthContext } from "./context/Auth.Context";
+import Footer from "./components/Footer";
 
 function App() {
   
@@ -28,6 +29,7 @@ function App() {
             <Route path='/likes' element={authUser ?<LikesPage /> : <Navigate to={"/login"} />} />
           </Routes>
           <Toaster/>
+          <Footer />
         </div>
     </div>
   );
