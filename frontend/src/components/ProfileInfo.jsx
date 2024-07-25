@@ -114,9 +114,9 @@ const ProfileInfo = ({userProfile}) => {
 					<div className='my-2'>
 						<p className='text-gray-600 font-bold text-sm'>Full name</p>
 						<p className=''>{userProfile?.name}</p>
-						<a>
+						
 							<Graph />
-						</a>
+						
 					</div>
 				)}
 
