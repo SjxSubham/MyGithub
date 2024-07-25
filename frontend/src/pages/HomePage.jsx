@@ -5,6 +5,7 @@ import SortRepos from '../components/SortRepos'
 import ProfileInfo from '../components/ProfileInfo'
 import Repos from '../components/Repos'
 import Spinner from '../components/Spinner'
+import Graph from '../components/Graph'
 
 const Homepage = () => {
   const [userProfile, setUserProfile] = useState(null)
@@ -75,6 +76,7 @@ const Homepage = () => {
       {userProfile && !loading && <ProfileInfo  userProfile={userProfile} />}
       {!loading && <Repos  repos={repos} />}
       {loading && <Spinner />}
+      {userProfile && !loading && <Graph />}
 </div>
     </div>
   )

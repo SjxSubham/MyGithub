@@ -8,6 +8,7 @@ import { FaLinkedin } from "react-icons/fa6";
 import { MdOutlineMailOutline } from "react-icons/md";
 import { formatMemeberSince } from "../utills/functions";
 import LikeProfile from './LikeProfile';
+import Graph from './Graph';
 
 const ProfileInfo = ({userProfile}) => {
 	// const userProfile = {
@@ -113,6 +114,9 @@ const ProfileInfo = ({userProfile}) => {
 					<div className='my-2'>
 						<p className='text-gray-600 font-bold text-sm'>Full name</p>
 						<p className=''>{userProfile?.name}</p>
+						<a>
+							<Graph />
+						</a>
 					</div>
 				)}
 
