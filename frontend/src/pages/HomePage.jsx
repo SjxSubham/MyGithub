@@ -76,7 +76,7 @@ const Homepage = () => {
       {userProfile && !loading && <ProfileInfo  userProfile={userProfile} />}
       {!loading && <Repos  repos={repos} />}
       {loading && <Spinner />}
-      {userProfile && !loading && <Graph />}
+      {/* {userProfile && !loading && <Graph />} */}
 </div>
     </div>
   )
