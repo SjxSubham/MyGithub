@@ -1,9 +1,9 @@
 import React from 'react';
 
 const Graph = ({ userProfile }) => {
-    let userName = userProfile?.login || 'sjxsubhamn'; // Fallback value
-    console.log('userProfile:', userProfile); // Debugging log
-    console.log('userName:', userName); // Debugging log
+    let userName = userProfile?.login || 'sjxsubhamn'; // Fallback value checking 
+    // console.log('userProfile:', userProfile);
+    // console.log('userName:', userName); 
   return (
     <div>
        <a href={`https://github.com/${userName}`}>
