@@ -4,6 +4,7 @@ const Graph = ({ userProfile }) => {
     let userName = userProfile?.login || 'sjxsubhamn'; // Fallback value checking 
     // console.log('userProfile:', userProfile);
     // console.log('userName:', userName); 
+    
   return (
     <div>
        <a href={`https://github.com/${userName}`}>
