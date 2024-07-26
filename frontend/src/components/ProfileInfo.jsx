@@ -115,7 +115,7 @@ const ProfileInfo = ({userProfile}) => {
 						<p className='text-gray-600 font-bold text-sm'>Full name</p>
 						<p className=''>{userProfile?.name}</p>
 						
-							<Graph />
+							<Graph userProfile={userProfile}/>
 						
 					</div>
 				)}

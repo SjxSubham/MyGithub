@@ -1,7 +1,7 @@
 import React from 'react';
 
 const Graph = ({ userProfile }) => {
-    let userName = userProfile?.login || 'SjxSubhamn'; // Fallback value
+    let userName = userProfile?.login || 'sjxsubhamn'; // Fallback value
     console.log('userProfile:', userProfile); // Debugging log
     console.log('userName:', userName); // Debugging log
   return (
