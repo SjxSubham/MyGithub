@@ -13,7 +13,7 @@ const Sidebar = () => {
   const {authUser} = useAuthContext();
 
   return (
-    <aside className='flex flex-col items-center min-w-12 sm:w-12 sticky top-0 left-0 h-screen py-8
+    <aside className='flex flex-col items-center min-w-24 sm:w-12 sticky top-0 left-0 h-screen py-8
     overflow-y-auto border-r w-full rounded-md bg-glass'>
      <nav className='h-full flex flex-col gap-3'>
       <Link to='/' className='flex justify-center'>
@@ -31,18 +31,19 @@ const Sidebar = () => {
       )}
 
       {authUser && (
-              <Link to='/explore' className='p-1.5 flex justify-center  transition-colors duration-200 rounded-lg hover:bg-gray-800'>
-                < MdOutlineExplore size={22} />
+              <Link to='/explore' className='text-md font-mono p-1.5 flex justify-center  transition-colors duration-200 rounded-lg hover:bg-gray-800'>
+               Explore < MdOutlineExplore size={22} />
               </Link>
             )}
       {!authUser && (
-              <Link to='/login' className='p-1.5 flex justify-center  transition-colors duration-200 rounded-lg hover:bg-gray-800'>
-                <LuLogIn size={22} />
+              <Link to='/login' className='text-md p-1.5 flex justify-center  transition-colors duration-200 rounded-lg hover:bg-gray-800'>
+                Login<LuLogIn size={22} />
+                
               </Link>
             )}
       {!authUser && (
-              <Link to='/signup' className='p-1.5 flex justify-center  transition-colors duration-200 rounded-lg hover:bg-gray-800'>
-                <SiGnuprivacyguard size={22} />
+              <Link to='/signup' className='text-md font-mono p-1.5 flex justify-center  transition-colors duration-200 rounded-lg hover:bg-gray-800'>
+                Signup<SiGnuprivacyguard size={22} />
               </Link>
             )}
 
