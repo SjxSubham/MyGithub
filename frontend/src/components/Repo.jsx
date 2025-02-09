@@ -63,7 +63,7 @@ const Repo = ({repo}) => {
         <img src={PROGRAMMING_LANGUAGES[repo.language]} alt='Programming Language icon' className='h-8' />
     ): null} */}
     <div className='languages'>
-        {repo.languages.map((language) => (
+        {repo.language.map((language) => (
           PROGRAMMING_LANGUAGES[language] ? (
             <img
               key={language}
