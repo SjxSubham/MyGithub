@@ -67,7 +67,7 @@ const Repo = ({repo}) => {
           PROGRAMMING_LANGUAGES[language] ? (
             <img
               key={language}
-              src={PROGRAMMING_LANGUAGES[language]}
+              src={PROGRAMMING_LANGUAGES[repo.language]}
               alt={`${language} icon`}
               className='h-8'
             />
