@@ -59,21 +59,10 @@ const Repo = ({repo}) => {
         Released on {formattedDate}
     </time>
     <p className='mb-4 text-base font-normal text-gray-500'>{repo.description ? repo.description.slice(0, 500): "No DesCription Provided"}</p>
-    {/* {PROGRAMMING_LANGUAGES[repo.language] ? (
+    {PROGRAMMING_LANGUAGES[repo.language] ? (
         <img src={PROGRAMMING_LANGUAGES[repo.language]} alt='Programming Language icon' className='h-8' />
-    ): null} */}
-    <div className='languages'>
-        {repo.language.map((language) => (
-          PROGRAMMING_LANGUAGES[language] ? (
-            <img
-              key={language}
-              src={PROGRAMMING_LANGUAGES[repo.language]}
-              alt={`${language} icon`}
-              className='h-8'
-            />
-          ) : null
-        ))}
-      </div>
+    ): null}
+     
 </li>
   )
 }
