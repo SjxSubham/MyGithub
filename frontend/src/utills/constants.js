@@ -34,6 +34,6 @@ export const PROGRAMMING_LANGUAGES = {
     Assembly: "/assembly.svg",
     Verilog: "/verilog.svg",
     VHDL: "/vhdl.svg",
-    JupyterNotebook: "/jupyter.svg",
+    Ipynb: "/jupyter.svg",
     ShellScript: "/shell.svg",
 };
