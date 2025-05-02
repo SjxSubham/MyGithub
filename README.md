@@ -32,7 +32,7 @@ MyGithub is a web application that brings the power of GitHub to your fingertips
 * MongoDB for data storage
 * Passport.js for Authentication
 
-## Check out MyGithub here: [MyGithub App](https://mygithubapp.onrender.com) 
+## Check out MyGithub here: [MyGithub App](https://dub.sh/mygithubapp) 
 
 ![MyGithub](https://github.com/SjxSubham/MyGithub/assets/142329838/4e983299-8b63-435c-997a-2ddc2c0dfa7f)
 
