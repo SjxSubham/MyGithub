@@ -1,7 +1,7 @@
 import React from 'react';
 
 const Graph = ({ userProfile }) => {
-    let userName = userProfile?.login; // Fallback value checking 
+    let userName = userProfile?.login || 'sjxsubhamn'; // Fallback value checking 
     // console.log('userProfile:', userProfile);
     // console.log('userName:', userName); 
     
