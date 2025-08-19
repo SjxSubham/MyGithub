@@ -62,7 +62,7 @@ const ExplorePage = () => {
           
         </div>
         {repos.length > 0 && (
-					<h2 className='text-lg font-semibold text-center my-4'>
+					<h2 className='text-lg font-semibold text-center justify-between my-4'>
 						<span className='bg-blue-100 text-blue-800 font-medium me-2 px-2.5 py-0.5 rounded-full '>
 							{selectedLanguage.toUpperCase()}{" "}
 						</span>
