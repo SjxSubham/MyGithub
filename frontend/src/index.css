@@ -24,6 +24,12 @@ body{
 ::-webkit-scrollbar-thumb:hover{
     background: #242424;
 }
+.panel {
+    @apply bg-[#161b22] border border-[#30363d] rounded-lg p-4;
+  }
+  .badge {
+    @apply bg-[#30363d] text-white text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full;
+  }
 
 @layer components{
     .bg-glass {
