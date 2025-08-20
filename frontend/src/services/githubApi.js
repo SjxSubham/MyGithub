@@ -1,7 +1,7 @@
-import { getCache, setCache, getETag, setETag } from '../utils/cache.js';
+import { getCache, setCache, getETag, setETag } from '../utills/cache.js';
 
 const BASE = 'https://api.github.com';
-const TOKEN = import.meta.env.VITE_GITHUB_TOKEN || '';
+const TOKEN = import.meta.env.GITHUB_API_KEY || '';
 
 const TTL = {
   profile: 10 * 60 * 1000,

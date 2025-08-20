@@ -43,7 +43,7 @@ export default function ActivityTrends({ events }) {
   }, [events]);
 
   return (
-    <div className="panel">
+    <div className="panel bg-glass">
       <h3 className="text-base font-semibold mb-4">Activity (Daily Events)</h3>
       <canvas ref={canvas} height="220" />
     </div>

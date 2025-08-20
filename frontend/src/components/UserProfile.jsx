@@ -3,7 +3,7 @@ import React from 'react';
 export default function UserProfile({ profile, summary }) {
   if (!profile) return null;
   return (
-    <div className="panel flex gap-4 items-center">
+    <div className="panel bg-glass flex gap-4 items-center">
       <img
         src={profile.avatar_url}
         alt={profile.login}
