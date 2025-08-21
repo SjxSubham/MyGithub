@@ -55,7 +55,7 @@ const Sidebar = () => {
         )}
         {authUser && (
           <Link to='/profile' className='flex flex-col gap-2 mt-auto'>
-            <UserRound />
+
           </Link>
         )}
      </nav>
