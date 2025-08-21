@@ -2,6 +2,7 @@ import React from 'react'
 import { Link } from 'react-router-dom'
 import { IoHomeSharp } from "react-icons/io5";
 import { FaHeart } from "react-icons/fa";
+import { User } from 'lucide-react';
 import { MdOutlineExplore } from "react-icons/md";
 import { LuLogIn } from "react-icons/lu";
 import { SiGnuprivacyguard } from "react-icons/si";
@@ -51,6 +52,11 @@ const Sidebar = () => {
           <div className='flex flex-col gap-2 mt-auto'>
             <Logout />
           </div>
+        )}
+        {authUser && (
+          <Link to='/profile' className='flex flex-col gap-2 mt-auto'>
+            <User />
+          </Link>
         )}
      </nav>
 
