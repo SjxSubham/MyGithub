@@ -53,11 +53,11 @@ const Sidebar = () => {
             <Logout />
           </div>
         )}
-        {authUser && (
+        {/* {authUser && (
           <Link to='/profile' className='flex flex-col gap-2 mt-auto'>
 
           </Link>
-        )}
+        )} */}
      </nav>
 
       </aside>
