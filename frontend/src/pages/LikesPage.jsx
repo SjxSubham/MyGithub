@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { FaHeart } from 'react-icons/fa'
 import { toast } from 'react-hot-toast';
+import { formatDate } from '../utills/functions';
 
 const LikesPage = () => {
   const [likes, setLikes] = useState([]);
