@@ -10,8 +10,21 @@ import Sidebar from './components/Sidebar';
 import { useAuthContext } from "./context/Auth.Context";
 import Footer from "./components/Footer";
 
+import React, { useState } from 'react';
+import UserSearch from './components/UserSearch.jsx';
+import UserProfile from './components/UserProfile.jsx';
+import StatsCards from './components/StatsCards.jsx';
+import RepoList from './components/RepoList.jsx';
+import EventTimeline from './components/EventTimeline.jsx';
+import LanguageChart from './components/LanguageChart.jsx';
+import ActivityTrends from './components/ActivityTrends.jsx';
+import Loading from './components/Loading.jsx';
+import ErrorMessage from './components/ErrorMessage.jsx';
+import useGithubUser from './hooks/useGithubUser.js';
+
 function App() {
-  
+  const [username, setUsername] = useState('octocat');
+  const { data,  error, refresh } = useGithubUser(username);
   const {authUser, loading} =  useAuthContext();
   console.log("Authenticated user:", authUser);
 
@@ -20,7 +33,18 @@ function App() {
   return  (
     <div className='flex'>
       <Sidebar />
-        <div className='max-w-5xl my-5 text-white mx-auto transiiton-all duration-300 flex-1'>
+        <div className='max-w-5xl my-5 text-white mx-auto transition-all duration-300 flex-1'>
+        <UserSearch onSearch={setUsername} defaultValue={username} onRefresh={refresh} />
+        {data && (
+          <>
+            <UserProfile profile={data.profile} summary={data.summary} />
+            <StatsCards summary={data.summary} />
+            <RepoList repos={data.repos} />
+            <EventTimeline events={data.events} />
+            <LanguageChart languages={data.languages} />
+            <ActivityTrends events={data.events} />
+          </>
+        )}
           <Routes>
             <Route path='/' element={<HomePage />} />
             <Route path='/login' element={!authUser ? <LoginPage /> : <Navigate to={"/"} />} />

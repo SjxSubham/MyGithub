@@ -17,8 +17,8 @@ const Search = ({onSearch}) => {
 				<input
 					type='search'
 					id='default-search'
-					className='block w-full p-4 ps-10 text-xs rounded-lg bg-glass focus:ring-blue-500 focus:border-blue-500 bg-transparent focus:bg-transparent '
-					placeholder='i.e: jackxons'
+					className='block w-full p-4 ps-10 text-s rounded-lg bg-glass focus:ring-blue-500 focus:border-blue-500 bg-transparent focus:bg-transparent '
+					placeholder='Github username...'
 					required
 					value={username}
 					onChange={(e) => setUsername(e.target.value)}

@@ -17,7 +17,7 @@ const Logout = () => {
   };
   return (
     <>
-    <img src={authUser?.avatarUrl} className=' w-10 h-10 rounded-full mb-2 border border-gray-800'/>
+    <img alt="User avatar" src={authUser?.avatarUrl} className=' w-10 h-10 rounded-full mb-2 border border-gray-800'/>
     
 
 
