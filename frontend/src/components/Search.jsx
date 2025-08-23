@@ -31,6 +31,7 @@ const Search = ({onSearch}) => {
 				</button>
 			</div>
 		</form>
+		
   )
 }
 
