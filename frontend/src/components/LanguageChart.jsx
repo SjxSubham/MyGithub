@@ -31,8 +31,8 @@ export default function LanguageChart({ languages }) {
   }, [languages]);
 
   return (
-    <div className="panel">
-      <h3 className="text-base font-semibold mb-4">Languages (Repo Count)</h3>
+    <div className="panel bg-glass">
+      <h3 className="text-base font-semibold mb-4">Languages (Repo Count) </h3>
       <canvas ref={ref} height="220" />
     </div>
   );

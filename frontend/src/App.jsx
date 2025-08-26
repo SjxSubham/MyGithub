@@ -10,8 +10,21 @@ import Sidebar from './components/Sidebar';
 import { useAuthContext } from "./context/Auth.Context";
 import Footer from "./components/Footer";
 
+import React, { useState } from 'react';
+import UserSearch from './components/UserSearch.jsx';
+import UserProfile from './components/UserProfile.jsx';
+import StatsCards from './components/StatsCards.jsx';
+import RepoList from './components/RepoList.jsx';
+import EventTimeline from './components/EventTimeline.jsx';
+import LanguageChart from './components/LanguageChart.jsx';
+import ActivityTrends from './components/ActivityTrends.jsx';
+import Loading from './components/Loading.jsx';
+import ErrorMessage from './components/ErrorMessage.jsx';
+import useGithubUser from './hooks/useGithubUser.js';
+
 function App() {
-  
+  const [username, setUsername] = useState('octocat');
+  const { data,  error, refresh } = useGithubUser(username);
   const {authUser, loading} =  useAuthContext();
   console.log("Authenticated user:", authUser);
 
@@ -27,6 +40,7 @@ function App() {
             <Route path='/signup' element={!authUser ? <SignUpPage /> : <Navigate to = {"/"} />} />
             <Route path='/explore' element={authUser ? <ExplorePage /> : <Navigate to ={"/login"} />}  />
             <Route path='/likes' element={authUser ?<LikesPage /> : <Navigate to={"/login"} />} />
+            <Route path='/profile' element={authUser ?<UserProfile /> : <Navigate to={"/login"} />} />
           </Routes>
           <Toaster/>
           <Footer />

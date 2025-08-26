@@ -16,7 +16,7 @@ function describe(ev) {
 export default function EventTimeline({ events }) {
   if (!events) return null;
   return (
-    <div className="panel">
+    <div className="panel bg-glass">
       <h3 className="text-base font-semibold mb-4">Recent Events</h3>
       <div className="flex flex-col gap-3 max-h-[420px] overflow-y-auto pr-1">
         {events.slice(0, 40).map(e => (
