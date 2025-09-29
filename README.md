@@ -63,4 +63,5 @@ npm start
 ## License
 This project is licensed under the **[MIT License](MyGithub/LICENSE)**. See the LICENSE file for details.
 
->> Give a star to this repo 
+>> Give a star to this repo ⭐
+
