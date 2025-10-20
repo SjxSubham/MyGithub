@@ -1,4 +1,4 @@
-import React from "react";
+import { useEffect } from "react";
 import { toast } from "react-hot-toast";
 import { CiLogout } from "react-icons/ci";
 import { useAuthContext } from "../context/Auth.Context";
@@ -8,8 +8,8 @@ const Logout = ({ userProfile }) => {
   const handleLogout = async () => {
     try {
       const res = await fetch("/api/auth/logout", { credentials: "include" });
-      const data = await res.json();
-      // console.log(data);
+      await res.json();
+      // Response processed successfully
       setAuthUser(null);
     } catch (error) {
       toast.error(error.message);

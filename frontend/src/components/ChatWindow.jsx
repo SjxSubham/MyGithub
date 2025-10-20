@@ -7,7 +7,14 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
   const [chatMessages, setChatMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [repoUrl, setRepoUrl] = useState("");
+  const [showRepoInput, setShowRepoInput] = useState(false);
+  const [issues, setIssues] = useState([]);
+  const [prs, setPrs] = useState([]);
+  const [showIssuesSuggestions, setShowIssuesSuggestions] = useState(false);
+  const [isLoadingIssues, setIsLoadingIssues] = useState(false);
   const messageEndRef = useRef(null);
+  const issuesSuggestionRef = useRef(null);
 
   // Fetch chat messages when active chat changes
   useEffect(() => {
@@ -85,10 +92,10 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  const sendMessage = async (e) => {
+  const sendMessage = async (e, retryMessage = null, retryId = null) => {
     e.preventDefault();
 
-    if (!message.trim() || !activeChat) return;
+    if ((!message.trim() && !retryMessage) || !activeChat) return;
 
     // Get the receiver's username (the other participant)
     const receiver = activeChat.participants.find(
@@ -100,10 +107,29 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       return;
     }
 
+    // Use retry message if provided, otherwise use the input field message
+    const messageToSend = retryMessage || message.trim();
+
     // Function to send a message
     const sendMessageToServer = async (msgText, tempId = null) => {
       const isRetry = !!tempId;
       const tempMessageId = tempId || `temp-${Date.now()}`;
+
+      // Extract issue references from message
+      const extractedIssueRefs = [];
+      const issueRegex = /#(\d+)\s\(([^)]+)\)/g;
+      let match;
+
+      while ((match = issueRegex.exec(msgText)) !== null) {
+        extractedIssueRefs.push({
+          issueNumber: parseInt(match[1]),
+          title: match[2],
+          type: match[2].toLowerCase().includes("pr") ? "pr" : "issue",
+        });
+      }
+
+      // Create repo reference if we have a repo URL
+      const repoReference = repoUrl ? extractRepoInfo(repoUrl) : null;
 
       // Create a temporary message with pending status if not retrying
       if (!isRetry) {
@@ -115,6 +141,8 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           conversationId: activeChat._id,
           createdAt: new Date(),
           pending: true,
+          issueReferences: extractedIssueRefs,
+          repoReference,
         };
 
         // Add temporary message immediately for optimistic UI update
@@ -142,6 +170,9 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
             receiver,
             message: msgText,
             conversationId: activeChat._id,
+            issueReferences:
+              extractedIssueRefs.length > 0 ? extractedIssueRefs : undefined,
+            repoReference,
           }),
           credentials: "include",
         });
@@ -167,6 +198,8 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
             message: msgText,
             conversationId: activeChat._id,
             messageId: data._id,
+            issueReferences: extractedIssueRefs,
+            repoReference,
           });
         } else {
           // Mark the message as failed
@@ -195,29 +228,135 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       }
     };
 
-    // Create a temporary message with pending status
-    const tempMessage = {
-      _id: `temp-${Date.now()}`,
-      sender: authUser.username,
-      receiver,
-      message: message.trim(),
-      conversationId: activeChat._id,
-      createdAt: new Date(),
-      pending: true,
-    };
+    if (!retryId) {
+      // Create a temporary message with pending status
+      const tempMessage = {
+        _id: `temp-${Date.now()}`,
+        sender: authUser.username,
+        receiver,
+        message: messageToSend,
+        conversationId: activeChat._id,
+        createdAt: new Date(),
+        pending: true,
+      };
 
-    // Clear input field immediately
-    const sentMessage = message.trim();
-    setMessage("");
+      // Clear input field immediately if not retrying
+      if (!retryMessage) {
+        setMessage("");
+      }
 
-    // Send the message
-    await sendMessageToServer(sentMessage, tempMessage._id);
+      // Send the message
+      await sendMessageToServer(messageToSend, tempMessage._id);
+    } else {
+      // We're retrying an existing message
+      await sendMessageToServer(messageToSend, retryId);
+    }
   };
 
   const formatMessageTime = (timestamp) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
+
+  const extractRepoInfo = (url) => {
+    try {
+      const regex = /github\.com\/([^/]+)\/([^/]+)/;
+      const match = url.match(regex);
+      if (match && match.length >= 3) {
+        return { owner: match[1], repo: match[2] };
+      }
+    } catch (error) {
+      console.error("Error extracting repo info:", error);
+    }
+    return null;
+  };
+
+  const fetchIssuesAndPRs = async (repoUrl) => {
+    const repoInfo = extractRepoInfo(repoUrl);
+    if (!repoInfo) {
+      toast.error("Invalid GitHub repository URL");
+      return;
+    }
+
+    setIsLoadingIssues(true);
+    try {
+      // Fetch issues
+      const issuesRes = await fetch(
+        `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/issues?state=all&per_page=100`,
+      );
+      if (!issuesRes.ok) throw new Error("Failed to fetch issues");
+      const issuesData = await issuesRes.json();
+
+      // Separate issues and PRs
+      const fetchedIssues = issuesData.filter((item) => !item.pull_request);
+      const fetchedPRs = issuesData.filter((item) => item.pull_request);
+
+      setIssues(fetchedIssues);
+      setPrs(fetchedPRs);
+      toast.success(
+        `Loaded ${fetchedIssues.length} issues and ${fetchedPRs.length} PRs from ${repoInfo.owner}/${repoInfo.repo}`,
+      );
+    } catch (error) {
+      console.error("Error fetching issues/PRs:", error);
+      toast.error(
+        "Failed to load issues and PRs. Check if the repository is public and the URL is correct.",
+      );
+    } finally {
+      setIsLoadingIssues(false);
+    }
+  };
+
+  const handleMessageChange = (e) => {
+    const value = e.target.value;
+    setMessage(value);
+
+    // Check if we should show issue suggestions
+    if (value.includes("#") && (issues.length > 0 || prs.length > 0)) {
+      const lastHashPosition = value.lastIndexOf("#");
+      const afterHash = value.slice(lastHashPosition + 1);
+
+      // Only show suggestions if we're right after a # or typing a number
+      if (afterHash === "" || /^\d+$/.test(afterHash)) {
+        setShowIssuesSuggestions(true);
+      } else {
+        setShowIssuesSuggestions(false);
+      }
+    } else {
+      setShowIssuesSuggestions(false);
+    }
+  };
+
+  const insertIssuePrReference = (item) => {
+    const lastHashIndex = message.lastIndexOf("#");
+    const beforeHash = message.substring(0, lastHashIndex);
+    const afterNumber =
+      message.substring(lastHashIndex).match(/^\#\d*/)?.[0] || "#";
+    const afterRest = message.substring(lastHashIndex + afterNumber.length);
+
+    // Format: #123 (Title)
+    const formattedReference = `#${item.number} (${item.title}) `;
+    const newMessage = beforeHash + formattedReference + afterRest;
+
+    setMessage(newMessage);
+    setShowIssuesSuggestions(false);
+  };
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        issuesSuggestionRef.current &&
+        !issuesSuggestionRef.current.contains(event.target)
+      ) {
+        setShowIssuesSuggestions(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   if (!activeChat) {
     return (
@@ -239,24 +378,59 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
   return (
     <div className="w-2/3 flex flex-col h-screen bg-gray-800">
       {/* Chat header */}
-      <div className="p-4 border-b border-gray-700 flex items-center">
-        {otherUser.avatarUrl ? (
-          <img
-            src={otherUser.avatarUrl}
-            alt={otherUser.username}
-            className="w-10 h-10 rounded-full mr-3"
-          />
-        ) : (
-          <div className="w-10 h-10 rounded-full mr-3 bg-gray-700 flex items-center justify-center text-white font-medium">
-            {otherUser.username.charAt(0).toUpperCase()}
+      <div className="p-4 border-b border-gray-700">
+        <div className="flex items-center">
+          {otherUser.avatarUrl ? (
+            <img
+              src={otherUser.avatarUrl}
+              alt={otherUser.username}
+              className="w-10 h-10 rounded-full mr-3"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full mr-3 bg-gray-700 flex items-center justify-center text-white font-medium">
+              {otherUser.username.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div>
+            <div className="font-medium">
+              {otherUser.name || otherUser.username}
+            </div>
+            <div className="text-sm text-gray-400">@{otherUser.username}</div>
+          </div>
+          <button
+            onClick={() => setShowRepoInput(!showRepoInput)}
+            className="ml-auto bg-gray-700 hover:bg-gray-600 text-xs px-2 py-1 rounded text-gray-200 flex items-center"
+          >
+            {showRepoInput ? "Hide Repo" : "Link Repo"}
+            <svg
+              className="w-4 h-4 ml-1"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+            >
+              <path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v.5a.25.25 0 0 1-.25.25h-3.5a.25.25 0 0 1-.25-.25Z" />
+            </svg>
+          </button>
+        </div>
+
+        {showRepoInput && (
+          <div className="mt-3 flex items-center">
+            <input
+              type="text"
+              value={repoUrl}
+              onChange={(e) => setRepoUrl(e.target.value)}
+              placeholder="Paste GitHub repo URL (e.g. https://github.com/username/repo)"
+              className="flex-1 p-2 bg-gray-700 border border-gray-600 rounded text-gray-100 text-sm focus:outline-none focus:border-blue-500"
+            />
+            <button
+              onClick={() => fetchIssuesAndPRs(repoUrl)}
+              className="ml-2 bg-blue-600 px-3 py-2 rounded hover:bg-blue-700 text-sm"
+              disabled={!repoUrl.includes("github.com")}
+            >
+              Load Issues
+            </button>
           </div>
         )}
-        <div>
-          <div className="font-medium">
-            {otherUser.name || otherUser.username}
-          </div>
-          <div className="text-sm text-gray-400">@{otherUser.username}</div>
-        </div>
       </div>
 
       {/* Chat messages */}
@@ -281,7 +455,26 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                         : "bg-gray-700 text-gray-100 rounded-tl-none"
                     } ${msg.pending ? "opacity-70" : ""} ${msg.failed ? "border border-red-500" : ""}`}
                   >
-                    <div>{msg.message}</div>
+                    <div>
+                      {msg.message
+                        .split(/(#\d+\s\([^)]+\))/)
+                        .map((part, index) => {
+                          // Check if this part matches the pattern of an issue/PR reference
+                          if (/^#\d+\s\([^)]+\)$/.test(part)) {
+                            const issueNumber = part.match(/#(\d+)/)[1];
+                            const isPR = part.toLowerCase().includes("pr");
+                            return (
+                              <span
+                                key={index}
+                                className={`${isPR ? "bg-purple-900/40" : "bg-green-900/40"} text-${isPR ? "purple" : "green"}-300 px-1 rounded mx-1`}
+                              >
+                                {part}
+                              </span>
+                            );
+                          }
+                          return <span key={index}>{part}</span>;
+                        })}
+                    </div>
                     <div
                       className={`text-xs mt-1 flex items-center ${isCurrentUser ? "text-blue-200" : "text-gray-400"}`}
                     >
@@ -297,7 +490,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              sendMessageToServer(msg.message, msg._id);
+                              sendMessage(e, msg.message, msg._id);
                             }}
                             className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 rounded"
                           >
@@ -336,28 +529,146 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       {/* Message input */}
       <form
         onSubmit={sendMessage}
-        className="p-4 border-t border-gray-700 flex"
+        className="p-4 border-t border-gray-700 flex flex-col"
       >
-        <input
-          type="text"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Type a message..."
-          className="flex-1 p-2 bg-gray-700 border border-gray-600 rounded-l-lg focus:outline-none focus:border-blue-500 text-gray-100"
-        />
-        <button
-          type="submit"
-          className="bg-blue-600 px-4 rounded-r-lg flex items-center justify-center hover:bg-blue-700 transition-colors"
-          disabled={!message.trim() || sendingMessage}
-        >
-          {sendingMessage ? (
-            <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
-          ) : (
-            <IoSend
-              className={message.trim() ? "text-white" : "text-gray-300"}
-            />
+        <div className="relative flex w-full">
+          <input
+            type="text"
+            value={message}
+            onChange={handleMessageChange}
+            placeholder={
+              repoUrl
+                ? "Type a message... (use # to reference issues/PRs)"
+                : "Type a message..."
+            }
+            className="flex-1 p-2 bg-gray-700 border border-gray-600 rounded-l-lg focus:outline-none focus:border-blue-500 text-gray-100"
+          />
+          <button
+            type="submit"
+            className="bg-blue-600 px-4 rounded-r-lg flex items-center justify-center hover:bg-blue-700 transition-colors"
+            disabled={!message.trim() || sendingMessage}
+          >
+            {sendingMessage ? (
+              <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
+            ) : (
+              <IoSend
+                className={message.trim() ? "text-white" : "text-gray-300"}
+              />
+            )}
+          </button>
+
+          {/* Issues and PRs suggestions dropdown */}
+          {showIssuesSuggestions && (
+            <div
+              ref={issuesSuggestionRef}
+              className="absolute bottom-full left-0 mb-2 w-full max-h-60 overflow-y-auto bg-gray-800 border border-gray-700 rounded shadow-lg z-10"
+            >
+              {issues.length > 0 && (
+                <div className="p-2">
+                  <div className="text-xs font-semibold text-gray-400 mb-1">
+                    ISSUES
+                  </div>
+                  {issues
+                    .filter((issue) => {
+                      const searchText = message.substring(
+                        message.lastIndexOf("#") + 1,
+                      );
+                      return (
+                        searchText === "" ||
+                        issue.number.toString().includes(searchText)
+                      );
+                    })
+                    .slice(0, 5)
+                    .map((issue) => (
+                      <div
+                        key={issue.id}
+                        className="p-2 hover:bg-gray-700 cursor-pointer rounded text-sm flex items-center"
+                        onClick={() => insertIssuePrReference(issue)}
+                      >
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-200 text-green-800 mr-2">
+                          Issue #{issue.number}
+                        </span>
+                        <span className="truncate">{issue.title}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              {prs.length > 0 && (
+                <div className="p-2">
+                  <div className="text-xs font-semibold text-gray-400 mb-1">
+                    PULL REQUESTS
+                  </div>
+                  {prs
+                    .filter((pr) => {
+                      const searchText = message.substring(
+                        message.lastIndexOf("#") + 1,
+                      );
+                      return (
+                        searchText === "" ||
+                        pr.number.toString().includes(searchText)
+                      );
+                    })
+                    .slice(0, 5)
+                    .map((pr) => (
+                      <div
+                        key={pr.id}
+                        className="p-2 hover:bg-gray-700 cursor-pointer rounded text-sm flex items-center"
+                        onClick={() => insertIssuePrReference(pr)}
+                      >
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-200 text-purple-800 mr-2">
+                          PR #{pr.number}
+                        </span>
+                        <span className="truncate">{pr.title}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              {isLoadingIssues && (
+                <div className="p-4 text-center">
+                  <div className="inline-block w-4 h-4 border-t-2 border-b-2 border-blue-500 rounded-full animate-spin mr-2"></div>
+                  Loading issues and PRs...
+                </div>
+              )}
+
+              {!isLoadingIssues && issues.length === 0 && prs.length === 0 && (
+                <div className="p-4 text-center text-gray-500">
+                  No issues or PRs found
+                </div>
+              )}
+            </div>
           )}
-        </button>
+        </div>
+
+        {repoUrl && (
+          <div className="mt-2 text-xs text-gray-400 flex items-center">
+            <svg
+              className="w-3 h-3 mr-1"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+            >
+              <path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v.5a.25.25 0 0 1-.25.25h-3.5a.25.25 0 0 1-.25-.25Z" />
+            </svg>
+            Linked to {extractRepoInfo(repoUrl)?.owner}/
+            {extractRepoInfo(repoUrl)?.repo}
+            {issues.length > 0 || prs.length > 0
+              ? ` (${issues.length} issues, ${prs.length} PRs)`
+              : ""}
+            <button
+              onClick={() => {
+                setRepoUrl("");
+                setIssues([]);
+                setPrs([]);
+              }}
+              className="ml-2 text-gray-500 hover:text-gray-300"
+              type="button"
+            >
+              Unlink
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );

@@ -24,8 +24,25 @@ const messageSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    issueReferences: [
+      {
+        issueNumber: Number,
+        title: String,
+        url: String,
+        type: {
+          type: String,
+          enum: ["issue", "pr"],
+          default: "issue",
+        },
+      },
+    ],
+    repoReference: {
+      url: String,
+      owner: String,
+      repo: String,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // Create an index for faster queries

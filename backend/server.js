@@ -65,7 +65,15 @@ io.on("connection", (socket) => {
 
   socket.on(
     "sendMessage",
-    ({ sender, receiver, message, conversationId, messageId }) => {
+    ({
+      sender,
+      receiver,
+      message,
+      conversationId,
+      messageId,
+      issueReferences,
+      repoReference,
+    }) => {
       const receiverSocketId = onlineUsers.get(receiver);
       if (receiverSocketId) {
         io.to(receiverSocketId).emit("receiveMessage", {
@@ -74,6 +82,8 @@ io.on("connection", (socket) => {
           conversationId,
           createdAt: new Date(),
           _id: messageId,
+          issueReferences,
+          repoReference,
         });
 
         // Send delivery confirmation back to sender
