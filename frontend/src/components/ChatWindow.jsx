@@ -146,11 +146,17 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
     <div className="w-2/3 flex flex-col h-screen bg-gray-800">
       {/* Chat header */}
       <div className="p-4 border-b border-gray-700 flex items-center">
-        <img
-          src={otherUser.avatarUrl}
-          alt={otherUser.username}
-          className="w-10 h-10 rounded-full mr-3"
-        />
+        {otherUser.avatarUrl ? (
+          <img
+            src={otherUser.avatarUrl}
+            alt={otherUser.username}
+            className="w-10 h-10 rounded-full mr-3"
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-full mr-3 bg-gray-700 flex items-center justify-center text-white font-medium">
+            {otherUser.username.charAt(0).toUpperCase()}
+          </div>
+        )}
         <div>
           <div className="font-medium">
             {otherUser.name || otherUser.username}

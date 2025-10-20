@@ -139,11 +139,17 @@ const ChatSidebar = ({
                   className="flex items-center p-3 hover:bg-gray-800 rounded cursor-pointer"
                   onClick={() => startNewChat(user.username)}
                 >
-                  <img
-                    src={user.avatarUrl}
-                    alt={user.username}
-                    className="w-10 h-10 rounded-full mr-3"
-                  />
+                  {user.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.username}
+                      className="w-10 h-10 rounded-full mr-3"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full mr-3 bg-gray-700 flex items-center justify-center text-white font-medium">
+                      {user.username.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <div className="font-medium">
                       {user.name || user.username}
@@ -183,11 +189,17 @@ const ChatSidebar = ({
                     onClick={() => setActiveChat(conversation)}
                   >
                     <div className="relative">
-                      <img
-                        src={otherUser.avatarUrl}
-                        alt={otherUser.username}
-                        className="w-12 h-12 rounded-full mr-3"
-                      />
+                      {otherUser.avatarUrl ? (
+                        <img
+                          src={otherUser.avatarUrl}
+                          alt={otherUser.username}
+                          className="w-12 h-12 rounded-full mr-3"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full mr-3 bg-gray-700 flex items-center justify-center text-white font-medium">
+                          {otherUser.username.charAt(0).toUpperCase()}
+                        </div>
+                      )}
                       {isOnline && (
                         <BsCircleFill className="absolute bottom-0 right-2 text-green-500 text-xs" />
                       )}
