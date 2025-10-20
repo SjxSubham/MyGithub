@@ -208,7 +208,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
   const otherUser = activeChat.participantDetails[0];
 
   return (
-    <div className="w-2/3 flex flex-col h-screen bg-gray-800">
+    <div className="w-2/3 flex flex-col h-screen bg-glass">
       {/* Chat header */}
       <div className="p-4 border-b border-gray-700 flex items-center">
         {otherUser.avatarUrl ? (

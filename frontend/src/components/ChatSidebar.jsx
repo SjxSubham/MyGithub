@@ -110,7 +110,7 @@ const ChatSidebar = ({
   };
 
   return (
-    <div className="w-1/3 border-r border-gray-700 bg-gray-900 text-gray-100 h-screen overflow-y-auto">
+    <div className="w-1/3 border-r border-gray-700 bg-gray-900 text-gray-100 h-screen overflow-y-auto bg-glass">
       <div className="p-4 border-b border-gray-700">
         <h2 className="text-xl font-bold mb-4 flex items-center">
           <IoChatboxEllipses className="mr-2" /> Chats
@@ -167,7 +167,7 @@ const ChatSidebar = ({
         </div>
       ) : (
         // Conversations list
-        <div className="p-2">
+        <div className="p-2 ">
           {loading ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
