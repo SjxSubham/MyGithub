@@ -55,7 +55,7 @@ const Sidebar = () => {
         {!authUser && (
           <Link
             to="/login"
-            className="text-md p-1.5 flex justify-center  transition-colors duration-200 rounded-lg hover:bg-gray-800"
+            className="text-md font-mono p-1.5 flex justify-center  transition-colors duration-200 rounded-lg hover:bg-gray-800"
           >
             Login
             <LuLogIn size={22} />

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+// import { useEffect } from "react";
 import { toast } from "react-hot-toast";
 import { CiLogout } from "react-icons/ci";
 import { useAuthContext } from "../context/Auth.Context";
@@ -26,10 +26,10 @@ const Logout = ({ userProfile }) => {
       )}
 
       <div
-        className="cursor-pointer flex items-center p-2 border-spacing-1 border-gray-500 last:rounded-lg bg-glass mt-auto"
+        className="cursor-pointer font-mono flex items-center p-2 border-spacing-1 border-gray-500 last:rounded-lg bg-glass mt-auto"
         onClick={handleLogout}
-      >
-        <CiLogout size={22} />
+      >Logout
+        <CiLogout size={20} />
       </div>
     </>
   );
