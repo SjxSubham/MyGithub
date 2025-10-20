@@ -11,10 +11,20 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
   const [showRepoInput, setShowRepoInput] = useState(false);
   const [issues, setIssues] = useState([]);
   const [prs, setPrs] = useState([]);
+  const [gitHubToken, setGitHubToken] = useState("");
+  const [showTokenInput, setShowTokenInput] = useState(false);
   const [showIssuesSuggestions, setShowIssuesSuggestions] = useState(false);
   const [isLoadingIssues, setIsLoadingIssues] = useState(false);
   const messageEndRef = useRef(null);
   const issuesSuggestionRef = useRef(null);
+
+  // Load GitHub token from localStorage if available
+  useEffect(() => {
+    const savedToken = localStorage.getItem("github_token");
+    if (savedToken) {
+      setGitHubToken(savedToken);
+    }
+  }, []);
 
   // Fetch chat messages when active chat changes
   useEffect(() => {
@@ -280,12 +290,52 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
 
     setIsLoadingIssues(true);
     try {
-      // Fetch issues
+      console.log(`Fetching issues for ${repoInfo.owner}/${repoInfo.repo}...`);
+
+      // Prepare headers for GitHub API request
+      const headers = {};
+      if (gitHubToken) {
+        headers.Authorization = `token ${gitHubToken}`;
+      }
+
+      // Fetch issues with detailed error handling
       const issuesRes = await fetch(
-        `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/issues?state=all&per_page=100`,
+        `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/issues?state=all&per_page=100&sort=updated`,
+        { headers },
       );
-      if (!issuesRes.ok) throw new Error("Failed to fetch issues");
+
+      if (!issuesRes.ok) {
+        let errorData = {};
+        try {
+          errorData = await issuesRes.json();
+        } catch (e) {
+          console.error("Failed to parse error response:", e);
+        }
+
+        console.error("GitHub API error:", {
+          status: issuesRes.status,
+          statusText: issuesRes.statusText,
+          errorData,
+        });
+
+        if (issuesRes.status === 403) {
+          toast.error(
+            "GitHub API rate limit exceeded. Consider adding a personal access token.",
+            { duration: 6000 },
+          );
+          setShowTokenInput(true);
+        } else if (issuesRes.status === 404) {
+          toast.error("Repository not found or private. Check the URL.");
+        } else {
+          toast.error(
+            `GitHub API error: ${issuesRes.status} ${issuesRes.statusText}`,
+          );
+        }
+        return;
+      }
+
       const issuesData = await issuesRes.json();
+      console.log(`Fetched ${issuesData.length} issues/PRs from GitHub API`);
 
       // Separate issues and PRs
       const fetchedIssues = issuesData.filter((item) => !item.pull_request);
@@ -311,12 +361,22 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
     setMessage(value);
 
     // Check if we should show issue suggestions
-    if (value.includes("#") && (issues.length > 0 || prs.length > 0)) {
+    if (value.includes("#")) {
       const lastHashPosition = value.lastIndexOf("#");
       const afterHash = value.slice(lastHashPosition + 1);
 
+      console.log("Hash detected in message:", {
+        lastHashPosition,
+        afterHash,
+        issuesLength: issues.length,
+        prsLength: prs.length,
+        showSuggestions: afterHash === "" || /^\d+$/.test(afterHash),
+        messageValue: value,
+      });
+
       // Only show suggestions if we're right after a # or typing a number
       if (afterHash === "" || /^\d+$/.test(afterHash)) {
+        console.log("Showing issue suggestions", { issues, prs });
         setShowIssuesSuggestions(true);
       } else {
         setShowIssuesSuggestions(false);
@@ -330,7 +390,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
     const lastHashIndex = message.lastIndexOf("#");
     const beforeHash = message.substring(0, lastHashIndex);
     const afterNumber =
-      message.substring(lastHashIndex).match(/^\#\d*/)?.[0] || "#";
+      message.substring(lastHashIndex).match(/^#\d*/)?.[0] || "#";
     const afterRest = message.substring(lastHashIndex + afterNumber.length);
 
     // Format: #123 (Title)
@@ -357,6 +417,21 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Debug when issues or PRs change
+  useEffect(() => {
+    console.log(`Issues/PRs loaded:`, {
+      issuesCount: issues.length,
+      prsCount: prs.length,
+      showSuggestions: showIssuesSuggestions,
+      issuesList: issues
+        .slice(0, 3)
+        .map((i) => ({ number: i.number, title: i.title })),
+      prsList: prs
+        .slice(0, 3)
+        .map((p) => ({ number: p.number, title: p.title })),
+    });
+  }, [issues, prs, showIssuesSuggestions]);
 
   if (!activeChat) {
     return (
@@ -414,21 +489,62 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
         </div>
 
         {showRepoInput && (
-          <div className="mt-3 flex items-center">
-            <input
-              type="text"
-              value={repoUrl}
-              onChange={(e) => setRepoUrl(e.target.value)}
-              placeholder="Paste GitHub repo URL (e.g. https://github.com/username/repo)"
-              className="flex-1 p-2 bg-gray-700 border border-gray-600 rounded text-gray-100 text-sm focus:outline-none focus:border-blue-500"
-            />
-            <button
-              onClick={() => fetchIssuesAndPRs(repoUrl)}
-              className="ml-2 bg-blue-600 px-3 py-2 rounded hover:bg-blue-700 text-sm"
-              disabled={!repoUrl.includes("github.com")}
-            >
-              Load Issues
-            </button>
+          <div className="mt-3 flex flex-col gap-2">
+            <div className="flex items-center">
+              <input
+                type="text"
+                value={repoUrl}
+                onChange={(e) => setRepoUrl(e.target.value)}
+                placeholder="Paste GitHub repo URL (e.g. https://github.com/username/repo)"
+                className="flex-1 p-2 bg-gray-700 border border-gray-600 rounded text-gray-100 text-sm focus:outline-none focus:border-blue-500"
+              />
+              <button
+                onClick={() => {
+                  console.log("Fetching issues for:", repoUrl);
+                  fetchIssuesAndPRs(repoUrl);
+                }}
+                className="ml-2 bg-blue-600 px-3 py-2 rounded hover:bg-blue-700 text-sm"
+                disabled={!repoUrl || !repoUrl.includes("github.com")}
+              >
+                Load Issues
+              </button>
+            </div>
+
+            {(showTokenInput || gitHubToken) && (
+              <div className="flex items-center">
+                <input
+                  type="password"
+                  value={gitHubToken}
+                  onChange={(e) => setGitHubToken(e.target.value)}
+                  placeholder="GitHub personal access token (optional)"
+                  className="flex-1 p-2 bg-gray-700 border border-gray-600 rounded text-gray-100 text-sm focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  onClick={() => {
+                    if (gitHubToken) {
+                      localStorage.setItem("github_token", gitHubToken);
+                      toast.success("GitHub token saved");
+                      if (repoUrl) fetchIssuesAndPRs(repoUrl);
+                    } else {
+                      setShowTokenInput(false);
+                    }
+                  }}
+                  className="ml-2 bg-green-600 px-3 py-2 rounded hover:bg-green-700 text-sm"
+                  disabled={!gitHubToken && !showTokenInput}
+                >
+                  {gitHubToken ? "Save & Use" : "Cancel"}
+                </button>
+              </div>
+            )}
+
+            {!showTokenInput && !gitHubToken && (
+              <button
+                onClick={() => setShowTokenInput(true)}
+                className="self-start text-xs text-blue-400 hover:text-blue-300"
+              >
+                Add GitHub token (for higher rate limits)
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -461,7 +577,6 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                         .map((part, index) => {
                           // Check if this part matches the pattern of an issue/PR reference
                           if (/^#\d+\s\([^)]+\)$/.test(part)) {
-                            const issueNumber = part.match(/#(\d+)/)[1];
                             const isPR = part.toLowerCase().includes("pr");
                             return (
                               <span
@@ -528,7 +643,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
 
       {/* Message input */}
       <form
-        onSubmit={sendMessage}
+        onSubmit={(e) => sendMessage(e)}
         className="p-4 border-t border-gray-700 flex flex-col"
       >
         <div className="relative flex w-full">
@@ -536,6 +651,22 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
             type="text"
             value={message}
             onChange={handleMessageChange}
+            onKeyDown={(e) => {
+              if (e.key === "#") {
+                console.log("# key pressed", {
+                  issues: issues.length,
+                  prs: prs.length,
+                });
+                if (issues.length > 0 || prs.length > 0) {
+                  setShowIssuesSuggestions(true);
+                } else {
+                  console.log("No issues or PRs available for suggestions");
+                  toast.info(
+                    "No issues or PRs loaded. Link a repo and load issues first.",
+                  );
+                }
+              }
+            }}
             placeholder={
               repoUrl
                 ? "Type a message... (use # to reference issues/PRs)"
@@ -561,7 +692,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           {showIssuesSuggestions && (
             <div
               ref={issuesSuggestionRef}
-              className="absolute bottom-full left-0 mb-2 w-full max-h-60 overflow-y-auto bg-gray-800 border border-gray-700 rounded shadow-lg z-10"
+              className={`absolute bottom-full left-0 mb-2 w-full max-h-60 overflow-y-auto bg-gray-800 border ${issues.length === 0 && prs.length === 0 ? "border-red-500" : "border-gray-700"} rounded shadow-lg z-10`}
             >
               {issues.length > 0 && (
                 <div className="p-2">
@@ -634,7 +765,17 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
 
               {!isLoadingIssues && issues.length === 0 && prs.length === 0 && (
                 <div className="p-4 text-center text-gray-500">
-                  No issues or PRs found
+                  {repoUrl ? (
+                    <>
+                      No issues or PRs found. Make sure the repository URL is
+                      correct and public.
+                    </>
+                  ) : (
+                    <>
+                      Please link a GitHub repository first using the Link Repo
+                      button above.
+                    </>
+                  )}
                 </div>
               )}
             </div>
