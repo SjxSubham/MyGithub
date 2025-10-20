@@ -63,17 +63,24 @@ io.on("connection", (socket) => {
     console.log(`${username} joined the chat`);
   });
 
-  socket.on("sendMessage", ({ sender, receiver, message, conversationId }) => {
-    const receiverSocketId = onlineUsers.get(receiver);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("receiveMessage", {
-        sender,
-        message,
-        conversationId,
-        createdAt: new Date(),
-      });
-    }
-  });
+  socket.on(
+    "sendMessage",
+    ({ sender, receiver, message, conversationId, messageId }) => {
+      const receiverSocketId = onlineUsers.get(receiver);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("receiveMessage", {
+          sender,
+          message,
+          conversationId,
+          createdAt: new Date(),
+          _id: messageId,
+        });
+
+        // Send delivery confirmation back to sender
+        socket.emit("messageDelivered", messageId);
+      }
+    },
+  );
 
   socket.on("disconnect", () => {
     let disconnectedUser;

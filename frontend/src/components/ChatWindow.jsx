@@ -6,6 +6,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
   const [message, setMessage] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
   const messageEndRef = useRef(null);
 
   // Fetch chat messages when active chat changes
@@ -40,21 +41,44 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
   useEffect(() => {
     if (!socket || !activeChat) return;
 
+    // Handle incoming message from socket
     const handleIncomingMessage = (data) => {
       if (data.conversationId === activeChat._id) {
-        setChatMessages((prev) => [...prev, data]);
+        // Check if we already have a pending message with the same content
+        // This could happen if both users are online and the message is sent/received
+        const hasPendingMatch = chatMessages.some(
+          (msg) =>
+            msg.pending &&
+            msg.message === data.message &&
+            msg.sender === data.sender,
+        );
+
+        if (!hasPendingMatch) {
+          setChatMessages((prev) => [...prev, data]);
+        }
 
         // Also update the conversation's last message through parent component
         handleNewMessage(data);
       }
     };
 
+    // Handle message delivery confirmation
+    const handleMessageDelivered = (messageId) => {
+      setChatMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === messageId ? { ...msg, delivered: true } : msg,
+        ),
+      );
+    };
+
     socket.on("receiveMessage", handleIncomingMessage);
+    socket.on("messageDelivered", handleMessageDelivered);
 
     return () => {
       socket.off("receiveMessage", handleIncomingMessage);
+      socket.off("messageDelivered", handleMessageDelivered);
     };
-  }, [socket, activeChat, handleNewMessage]);
+  }, [socket, activeChat, handleNewMessage, chatMessages]);
 
   // Auto scroll to bottom when messages update
   useEffect(() => {
@@ -76,48 +100,118 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       return;
     }
 
-    try {
-      const response = await fetch("/api/chat/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          receiver,
-          message: message.trim(),
-          conversationId: activeChat._id,
-        }),
-        credentials: "include",
-      });
+    // Function to send a message
+    const sendMessageToServer = async (msgText, tempId = null) => {
+      const isRetry = !!tempId;
+      const tempMessageId = tempId || `temp-${Date.now()}`;
 
-      const data = await response.json();
-
-      if (response.ok) {
-        // Add message to local state
-        setChatMessages((prev) => [...prev, data]);
-
-        // Update the conversation's last message
-        handleNewMessage({
-          ...data,
-          createdAt: new Date(),
-        });
-
-        // Emit message via socket
-        socket.emit("sendMessage", {
+      // Create a temporary message with pending status if not retrying
+      if (!isRetry) {
+        const tempMessage = {
+          _id: tempMessageId,
           sender: authUser.username,
           receiver,
-          message: message.trim(),
+          message: msgText,
           conversationId: activeChat._id,
+          createdAt: new Date(),
+          pending: true,
+        };
+
+        // Add temporary message immediately for optimistic UI update
+        setChatMessages((prev) => [...prev, tempMessage]);
+      } else {
+        // Mark message as pending again for retry
+        setChatMessages((prev) =>
+          prev.map((msg) =>
+            msg._id === tempId ? { ...msg, pending: true, failed: false } : msg,
+          ),
+        );
+      }
+
+      // Scroll to the new message
+      messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
+
+      try {
+        setSendingMessage(true);
+        const response = await fetch("/api/chat/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            receiver,
+            message: msgText,
+            conversationId: activeChat._id,
+          }),
+          credentials: "include",
         });
 
-        setMessage("");
-      } else {
-        toast.error(data.error || "Failed to send message");
+        const data = await response.json();
+
+        if (response.ok) {
+          // Replace the temporary message with the actual message
+          setChatMessages((prev) =>
+            prev.map((msg) => (msg._id === tempMessageId ? data : msg)),
+          );
+
+          // Update the conversation's last message
+          handleNewMessage({
+            ...data,
+            createdAt: new Date(),
+          });
+
+          // Emit message via socket
+          socket.emit("sendMessage", {
+            sender: authUser.username,
+            receiver,
+            message: msgText,
+            conversationId: activeChat._id,
+            messageId: data._id,
+          });
+        } else {
+          // Mark the message as failed
+          setChatMessages((prev) =>
+            prev.map((msg) =>
+              msg._id === tempMessageId
+                ? { ...msg, failed: true, pending: false }
+                : msg,
+            ),
+          );
+          toast.error(data.error || "Failed to send message");
+        }
+      } catch (error) {
+        console.error("Error sending message:", error);
+        // Mark the message as failed
+        setChatMessages((prev) =>
+          prev.map((msg) =>
+            msg._id === tempMessageId
+              ? { ...msg, failed: true, pending: false }
+              : msg,
+          ),
+        );
+        toast.error("Something went wrong");
+      } finally {
+        setSendingMessage(false);
       }
-    } catch (error) {
-      console.error("Error sending message:", error);
-      toast.error("Something went wrong");
-    }
+    };
+
+    // Create a temporary message with pending status
+    const tempMessage = {
+      _id: `temp-${Date.now()}`,
+      sender: authUser.username,
+      receiver,
+      message: message.trim(),
+      conversationId: activeChat._id,
+      createdAt: new Date(),
+      pending: true,
+    };
+
+    // Clear input field immediately
+    const sentMessage = message.trim();
+    setMessage("");
+
+    // Send the message
+    await sendMessageToServer(sentMessage, tempMessage._id);
   };
 
   const formatMessageTime = (timestamp) => {
@@ -185,13 +279,45 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                       isCurrentUser
                         ? "bg-blue-600 text-white rounded-tr-none"
                         : "bg-gray-700 text-gray-100 rounded-tl-none"
-                    }`}
+                    } ${msg.pending ? "opacity-70" : ""} ${msg.failed ? "border border-red-500" : ""}`}
                   >
                     <div>{msg.message}</div>
                     <div
-                      className={`text-xs mt-1 ${isCurrentUser ? "text-blue-200" : "text-gray-400"}`}
+                      className={`text-xs mt-1 flex items-center ${isCurrentUser ? "text-blue-200" : "text-gray-400"}`}
                     >
-                      {formatMessageTime(msg.createdAt)}
+                      {msg.pending ? (
+                        <span className="flex items-center">
+                          Sending...
+                          <div className="ml-1 w-2 h-2 rounded-full bg-blue-200 animate-pulse"></div>
+                        </span>
+                      ) : msg.failed ? (
+                        <span className="flex items-center">
+                          <span className="text-red-300 mr-2">Failed</span>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              sendMessageToServer(msg.message, msg._id);
+                            }}
+                            className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 rounded"
+                          >
+                            Retry
+                          </button>
+                        </span>
+                      ) : (
+                        <span className="flex items-center">
+                          {formatMessageTime(msg.createdAt)}
+                          {isCurrentUser && msg.delivered && (
+                            <svg
+                              className="w-3 h-3 ml-1 text-blue-300"
+                              viewBox="0 0 24 24"
+                              fill="currentColor"
+                            >
+                              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                            </svg>
+                          )}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -222,9 +348,15 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
         <button
           type="submit"
           className="bg-blue-600 px-4 rounded-r-lg flex items-center justify-center hover:bg-blue-700 transition-colors"
-          disabled={!message.trim()}
+          disabled={!message.trim() || sendingMessage}
         >
-          <IoSend className={message.trim() ? "text-white" : "text-gray-300"} />
+          {sendingMessage ? (
+            <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
+          ) : (
+            <IoSend
+              className={message.trim() ? "text-white" : "text-gray-300"}
+            />
+          )}
         </button>
       </form>
     </div>

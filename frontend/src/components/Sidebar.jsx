@@ -73,7 +73,7 @@ const Sidebar = () => {
 
         {authUser && (
           <div className="flex flex-col gap-2 mt-auto">
-            <Logout />
+            <Logout userProfile={authUser} />
           </div>
         )}
         {/* {authUser && (
