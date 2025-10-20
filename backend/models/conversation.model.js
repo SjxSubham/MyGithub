@@ -16,16 +16,6 @@ const conversationSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
-    linkedRepo: {
-      url: String,
-      owner: String,
-      repo: String,
-      addedBy: String,
-      addedAt: {
-        type: Date,
-        default: Date.now,
-      },
-    },
   },
   { timestamps: true },
 );

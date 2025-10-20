@@ -7,20 +7,6 @@ import ensureAuthenticated from "../middleware/ensureAuthenticated.js";
 
 const router = express.Router();
 
-// Helper function to extract repo info from URL
-const extractRepoInfo = (url) => {
-  try {
-    const regex = /github\.com\/([^\/]+)\/([^\/]+)/;
-    const match = url.match(regex);
-    if (match && match.length >= 3) {
-      return { owner: match[1], repo: match[2] };
-    }
-  } catch (error) {
-    console.error("Error extracting repo info:", error);
-  }
-  return null;
-};
-
 // Get all conversations for the logged-in user
 router.get("/conversations", ensureAuthenticated, async (req, res) => {
   try {
@@ -136,13 +122,7 @@ router.get("/conversation/:username", ensureAuthenticated, async (req, res) => {
 // Send a new message
 router.post("/messages", ensureAuthenticated, async (req, res) => {
   try {
-    const {
-      receiver,
-      message,
-      conversationId,
-      repoReference,
-      issueReferences,
-    } = req.body;
+    const { receiver, message, conversationId } = req.body;
     const sender = req.user.username;
 
     if (!receiver || !message || !conversationId) {
@@ -164,43 +144,12 @@ router.post("/messages", ensureAuthenticated, async (req, res) => {
         .json({ error: "Not authorized to send message in this conversation" });
     }
 
-    // Extract issue references from message if they exist
-    const extractedIssueRefs = [];
-    const issueRegex = /#(\d+)\s\(([^)]+)\)/g;
-    let match;
-
-    // Get the conversation to check if it has a linked repo
-    const linkedRepo = conversation.linkedRepo;
-
-    while ((match = issueRegex.exec(message)) !== null) {
-      const issueNumber = parseInt(match[1]);
-      const title = match[2];
-      const type = title.toLowerCase().includes("pr") ? "pr" : "issue";
-
-      let url = null;
-      if (linkedRepo && linkedRepo.url) {
-        const baseUrl = linkedRepo.url.replace(/\/+$/, "");
-        const endpoint = type === "pr" ? "pull" : "issues";
-        url = `${baseUrl}/${endpoint}/${issueNumber}`;
-      }
-
-      extractedIssueRefs.push({
-        issueNumber: issueNumber,
-        title: title,
-        type: type,
-        url: url,
-      });
-    }
-
     // Create new message
     const newMessage = new Message({
       sender,
       receiver,
       message,
       conversationId,
-      repoReference,
-      issueReferences:
-        extractedIssueRefs.length > 0 ? extractedIssueRefs : undefined,
     });
 
     await newMessage.save();
@@ -232,98 +181,5 @@ router.get("/users", ensureAuthenticated, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
-// Link a GitHub repository to a conversation
-router.post(
-  "/conversations/:conversationId/repo",
-  ensureAuthenticated,
-  async (req, res) => {
-    try {
-      const { conversationId } = req.params;
-      const { repoUrl } = req.body;
-      const currentUser = req.user.username;
-
-      if (!repoUrl) {
-        return res.status(400).json({ error: "Repository URL is required" });
-      }
-
-      // Extract repo owner and name from URL
-      const repoInfo = extractRepoInfo(repoUrl);
-      if (!repoInfo) {
-        return res.status(400).json({ error: "Invalid GitHub repository URL" });
-      }
-
-      // Find the conversation
-      const conversation = await Conversation.findById(conversationId);
-      if (!conversation) {
-        return res.status(404).json({ error: "Conversation not found" });
-      }
-
-      // Check if user is part of this conversation
-      if (!conversation.participants.includes(currentUser)) {
-        return res
-          .status(403)
-          .json({ error: "Not authorized to modify this conversation" });
-      }
-
-      // Clean up the repo URL for consistency
-      const cleanRepoUrl = repoUrl
-        .trim()
-        .replace(/\.git$/, "")
-        .replace(/\/$/, "");
-
-      // Update the conversation with repo link
-      conversation.linkedRepo = {
-        url: cleanRepoUrl,
-        owner: repoInfo.owner,
-        repo: repoInfo.repo,
-        addedBy: currentUser,
-        addedAt: new Date(),
-      };
-
-      await conversation.save();
-
-      res.status(200).json(conversation);
-    } catch (error) {
-      console.error("Error linking repository:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  },
-);
-
-// Remove repository link from conversation
-router.delete(
-  "/conversations/:conversationId/repo",
-  ensureAuthenticated,
-  async (req, res) => {
-    try {
-      const { conversationId } = req.params;
-      const currentUser = req.user.username;
-
-      // Find the conversation
-      const conversation = await Conversation.findById(conversationId);
-      if (!conversation) {
-        return res.status(404).json({ error: "Conversation not found" });
-      }
-
-      // Check if user is part of this conversation
-      if (!conversation.participants.includes(currentUser)) {
-        return res
-          .status(403)
-          .json({ error: "Not authorized to modify this conversation" });
-      }
-
-      // Remove the repository link
-      conversation.linkedRepo = null;
-
-      await conversation.save();
-
-      res.status(200).json(conversation);
-    } catch (error) {
-      console.error("Error removing repository link:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  },
-);
 
 export default router;
