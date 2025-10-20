@@ -8,6 +8,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
   const [loading, setLoading] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [repoUrl, setRepoUrl] = useState("");
+  const [linkedRepo, setLinkedRepo] = useState(null);
   const [showRepoInput, setShowRepoInput] = useState(false);
   const [issues, setIssues] = useState([]);
   const [prs, setPrs] = useState([]);
@@ -40,6 +41,32 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
 
         if (response.ok) {
           setChatMessages(data);
+
+          // Check if conversation has a linked repo
+          const convResponse = await fetch(`/api/chat/conversations`, {
+            credentials: "include",
+          });
+          if (convResponse.ok) {
+            const conversations = await convResponse.json();
+            const currentConversation = conversations.find(
+              (conv) => conv._id === activeChat._id,
+            );
+            if (currentConversation && currentConversation.linkedRepo) {
+              setLinkedRepo(currentConversation.linkedRepo);
+              setRepoUrl(currentConversation.linkedRepo.url);
+
+              // If we have a linked repo, fetch its issues
+              if (currentConversation.linkedRepo.url) {
+                fetchIssuesAndPRs(currentConversation.linkedRepo.url);
+              }
+            } else {
+              // Reset if no linked repo
+              setLinkedRepo(null);
+              setRepoUrl("");
+              setIssues([]);
+              setPrs([]);
+            }
+          }
         } else {
           toast.error("Failed to load messages");
         }
@@ -135,11 +162,18 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           issueNumber: parseInt(match[1]),
           title: match[2],
           type: match[2].toLowerCase().includes("pr") ? "pr" : "issue",
+          url: repoUrl
+            ? `${repoUrl.replace(/\/$/, "")}/${match[2].toLowerCase().includes("pr") ? "pull" : "issues"}/${match[1]}`
+            : "",
         });
       }
 
       // Create repo reference if we have a repo URL
-      const repoReference = repoUrl ? extractRepoInfo(repoUrl) : null;
+      const repoReference = repoUrl
+        ? extractRepoInfo(repoUrl)
+        : linkedRepo
+          ? { owner: linkedRepo.owner, repo: linkedRepo.repo }
+          : null;
 
       // Create a temporary message with pending status if not retrying
       if (!isRetry) {
@@ -270,15 +304,60 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
 
   const extractRepoInfo = (url) => {
     try {
+      // Clean up URL to handle different formats
+      const cleanUrl = url.trim().replace(/\.git$/, "");
+
       const regex = /github\.com\/([^/]+)\/([^/]+)/;
-      const match = url.match(regex);
+      const match = cleanUrl.match(regex);
       if (match && match.length >= 3) {
-        return { owner: match[1], repo: match[2] };
+        const owner = match[1];
+        // Remove any trailing slashes or fragments
+        const repo = match[2].split("/")[0].split("#")[0].split("?")[0];
+        return { owner, repo };
       }
     } catch (error) {
       console.error("Error extracting repo info:", error);
     }
     return null;
+  };
+
+  const handleLinkRepository = async () => {
+    if (!activeChat || !repoUrl || !repoUrl.includes("github.com")) {
+      toast.error("Please enter a valid GitHub repository URL");
+      return;
+    }
+
+    console.log("Linking repository:", repoUrl);
+
+    try {
+      // Save the repository link to the conversation
+      const response = await fetch(
+        `/api/chat/conversations/${activeChat._id}/repo`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ repoUrl }),
+          credentials: "include",
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setLinkedRepo(data.linkedRepo);
+        toast.success("Repository linked to conversation");
+
+        // Now fetch the issues and PRs
+        await fetchIssuesAndPRs(repoUrl);
+      } else {
+        const errorText = await response.text();
+        throw new Error(`Failed to link repository: ${errorText}`);
+      }
+    } catch (error) {
+      console.error("Error linking repository:", error);
+      toast.error(error.message || "Failed to link repository");
+    }
   };
 
   const fetchIssuesAndPRs = async (repoUrl) => {
@@ -499,10 +578,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                 className="flex-1 p-2 bg-gray-700 border border-gray-600 rounded text-gray-100 text-sm focus:outline-none focus:border-blue-500"
               />
               <button
-                onClick={() => {
-                  console.log("Fetching issues for:", repoUrl);
-                  fetchIssuesAndPRs(repoUrl);
-                }}
+                onClick={handleLinkRepository}
                 className="ml-2 bg-blue-600 px-3 py-2 rounded hover:bg-blue-700 text-sm"
                 disabled={!repoUrl || !repoUrl.includes("github.com")}
               >
@@ -578,12 +654,31 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                           // Check if this part matches the pattern of an issue/PR reference
                           if (/^#\d+\s\([^)]+\)$/.test(part)) {
                             const isPR = part.toLowerCase().includes("pr");
+                            const issueNumber = part.match(/#(\d+)/)[1];
+                            const baseUrl =
+                              repoUrl || (linkedRepo && linkedRepo.url);
+                            const url = baseUrl
+                              ? `${baseUrl.replace(/\/$/, "")}/${isPR ? "pull" : "issues"}/${issueNumber}`
+                              : null;
+
                             return (
                               <span
                                 key={index}
                                 className={`${isPR ? "bg-purple-900/40" : "bg-green-900/40"} text-${isPR ? "purple" : "green"}-300 px-1 rounded mx-1`}
                               >
-                                {part}
+                                {url ? (
+                                  <a
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {part}
+                                  </a>
+                                ) : (
+                                  part
+                                )}
                               </span>
                             );
                           }
@@ -710,18 +805,43 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                       );
                     })
                     .slice(0, 5)
-                    .map((issue) => (
-                      <div
-                        key={issue.id}
-                        className="p-2 hover:bg-gray-700 cursor-pointer rounded text-sm flex items-center"
-                        onClick={() => insertIssuePrReference(issue)}
-                      >
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-200 text-green-800 mr-2">
-                          Issue #{issue.number}
-                        </span>
-                        <span className="truncate">{issue.title}</span>
-                      </div>
-                    ))}
+                    .map((issue) => {
+                      const baseUrl = repoUrl || (linkedRepo && linkedRepo.url);
+                      const issueUrl = baseUrl
+                        ? `${baseUrl.replace(/\/$/, "")}/issues/${issue.number}`
+                        : null;
+                      return (
+                        <div
+                          key={issue.id}
+                          className="p-2 hover:bg-gray-700 cursor-pointer rounded text-sm flex items-center"
+                          onClick={() => insertIssuePrReference(issue)}
+                        >
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-200 text-green-800 mr-2">
+                            Issue #{issue.number}
+                          </span>
+                          <span className="truncate">{issue.title}</span>
+                          {issueUrl && (
+                            <a
+                              href={issueUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ml-auto text-blue-400 hover:text-blue-300"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4"
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                              >
+                                <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                              </svg>
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               )}
 
@@ -741,18 +861,43 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                       );
                     })
                     .slice(0, 5)
-                    .map((pr) => (
-                      <div
-                        key={pr.id}
-                        className="p-2 hover:bg-gray-700 cursor-pointer rounded text-sm flex items-center"
-                        onClick={() => insertIssuePrReference(pr)}
-                      >
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-200 text-purple-800 mr-2">
-                          PR #{pr.number}
-                        </span>
-                        <span className="truncate">{pr.title}</span>
-                      </div>
-                    ))}
+                    .map((pr) => {
+                      const baseUrl = repoUrl || (linkedRepo && linkedRepo.url);
+                      const prUrl = baseUrl
+                        ? `${baseUrl.replace(/\/$/, "")}/pull/${pr.number}`
+                        : null;
+                      return (
+                        <div
+                          key={pr.id}
+                          className="p-2 hover:bg-gray-700 cursor-pointer rounded text-sm flex items-center"
+                          onClick={() => insertIssuePrReference(pr)}
+                        >
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-200 text-purple-800 mr-2">
+                            PR #{pr.number}
+                          </span>
+                          <span className="truncate">{pr.title}</span>
+                          {prUrl && (
+                            <a
+                              href={prUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ml-auto text-blue-400 hover:text-blue-300"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4"
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                              >
+                                <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                                <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                              </svg>
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               )}
 
@@ -782,7 +927,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           )}
         </div>
 
-        {repoUrl && (
+        {(repoUrl || linkedRepo) && (
           <div className="mt-2 text-xs text-gray-400 flex items-center">
             <svg
               className="w-3 h-3 mr-1"
@@ -792,8 +937,8 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
             >
               <path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v.5a.25.25 0 0 1-.25.25h-3.5a.25.25 0 0 1-.25-.25Z" />
             </svg>
-            Linked to {extractRepoInfo(repoUrl)?.owner}/
-            {extractRepoInfo(repoUrl)?.repo}
+            Linked to {extractRepoInfo(repoUrl)?.owner || linkedRepo?.owner}/
+            {extractRepoInfo(repoUrl)?.repo || linkedRepo?.repo}
             {issues.length > 0 || prs.length > 0
               ? ` (${issues.length} issues, ${prs.length} PRs)`
               : ""}
@@ -802,6 +947,22 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                 setRepoUrl("");
                 setIssues([]);
                 setPrs([]);
+                // Remove the link from the conversation
+                if (activeChat) {
+                  fetch(`/api/chat/conversations/${activeChat._id}/repo`, {
+                    method: "DELETE",
+                    credentials: "include",
+                  })
+                    .then((res) => {
+                      if (res.ok) {
+                        setLinkedRepo(null);
+                        toast.success("Repository unlinked from conversation");
+                      } else {
+                        throw new Error("Failed to unlink repository");
+                      }
+                    })
+                    .catch((err) => toast.error(err.message));
+                }
               }}
               className="ml-2 text-gray-500 hover:text-gray-300"
               type="button"

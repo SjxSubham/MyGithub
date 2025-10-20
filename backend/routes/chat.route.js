@@ -169,11 +169,26 @@ router.post("/messages", ensureAuthenticated, async (req, res) => {
     const issueRegex = /#(\d+)\s\(([^)]+)\)/g;
     let match;
 
+    // Get the conversation to check if it has a linked repo
+    const linkedRepo = conversation.linkedRepo;
+
     while ((match = issueRegex.exec(message)) !== null) {
+      const issueNumber = parseInt(match[1]);
+      const title = match[2];
+      const type = title.toLowerCase().includes("pr") ? "pr" : "issue";
+
+      let url = null;
+      if (linkedRepo && linkedRepo.url) {
+        const baseUrl = linkedRepo.url.replace(/\/+$/, "");
+        const endpoint = type === "pr" ? "pull" : "issues";
+        url = `${baseUrl}/${endpoint}/${issueNumber}`;
+      }
+
       extractedIssueRefs.push({
-        issueNumber: parseInt(match[1]),
-        title: match[2],
-        type: match[2].toLowerCase().includes("pr") ? "pr" : "issue",
+        issueNumber: issueNumber,
+        title: title,
+        type: type,
+        url: url,
       });
     }
 
@@ -251,9 +266,15 @@ router.post(
           .json({ error: "Not authorized to modify this conversation" });
       }
 
+      // Clean up the repo URL for consistency
+      const cleanRepoUrl = repoUrl
+        .trim()
+        .replace(/\.git$/, "")
+        .replace(/\/$/, "");
+
       // Update the conversation with repo link
       conversation.linkedRepo = {
-        url: repoUrl,
+        url: cleanRepoUrl,
         owner: repoInfo.owner,
         repo: repoInfo.repo,
         addedBy: currentUser,
