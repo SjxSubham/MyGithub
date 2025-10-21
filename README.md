@@ -20,6 +20,9 @@ MyGithub is a web application that brings the power of GitHub to your fingertips
 - Clone repositories.
 - Explore popular repos by username.
 - Explore popular repos of **Popular Languages**
+##### 6. Chat with Other Users:
+- Real-time chat functionality for connecting with fellow GitHub users.
+- Send messages, share ideas, and share screenshots.
 
 
   
@@ -31,6 +34,9 @@ MyGithub is a web application that brings the power of GitHub to your fingertips
 * Node.js with Express.js
 * MongoDB for data storage
 * Passport.js for Authentication
+* Socket.io for real-time communication
+* Multer for file uploads
+
 
 ## Check out MyGithub here: [MyGithub App](https://dub.sh/mygithubapp) 
 
@@ -46,16 +52,22 @@ git clone https://github.com/yourusername/mygithub.git
 
  3. Install dependencies:
 ```
-cd mygithub
+cd MyGithub
+npm install
+cd frontend
+npm i
+cd ..
+cd backend 
 npm install
 ```
- 3. Set up environment variables (e.g. GitHub API keys, MongoDB URI, CLient Base URL).
+ 3. Set up environment variables (e.g. GitHub API key, MongoDB URI, CLient Base URL) check .env.sample file for reference.
      
  4. Run the app:
 ```
 npm start
 
 ```
+(U may redirected automatically to the actual deployed site, make changes at the main.jsx file to run this in local development settings)
 
 ## Contributing
 **Contributions are welcome!** *Feel free to open issues or submit pull requests.*
