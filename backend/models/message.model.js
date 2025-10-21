@@ -16,6 +16,15 @@ const messageSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    messageType: {
+      type: String,
+      enum: ["text", "image", "emoji"],
+      default: "text",
+    },
+    imageUrl: {
+      type: String,
+      default: null,
+    },
     read: {
       type: Boolean,
       default: false,

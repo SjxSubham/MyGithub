@@ -1,13 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 import { IoSend } from "react-icons/io5";
 import { toast } from "react-hot-toast";
+import { BiImageAdd } from "react-icons/bi";
+import { MdEmojiEmotions } from "react-icons/md";
+import Picker from "emoji-picker-react";
 
 const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
   const [message, setMessage] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const messageEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const emojiPickerRef = useRef(null);
 
   // Fetch chat messages when active chat changes
   useEffect(() => {
@@ -50,7 +57,8 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           (msg) =>
             msg.pending &&
             msg.message === data.message &&
-            msg.sender === data.sender,
+            msg.sender === data.sender &&
+            msg.messageType === data.messageType,
         );
 
         if (!hasPendingMatch) {
@@ -85,10 +93,14 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
-  const sendMessage = async (e) => {
+  const sendMessage = async (e, emojiObject = null) => {
     e.preventDefault();
 
-    if (!message.trim() || !activeChat) return;
+    // Use emoji if provided, otherwise use text message
+    let messageToSend = emojiObject ? emojiObject.emoji : message.trim();
+    let messageType = emojiObject ? "emoji" : "text";
+
+    if ((!messageToSend && messageType === "text") || !activeChat) return;
 
     // Get the receiver's username (the other participant)
     const receiver = activeChat.participants.find(
@@ -105,7 +117,8 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       _id: `temp-${Date.now()}`,
       sender: authUser.username,
       receiver,
-      message: message.trim(),
+      message: messageToSend,
+      messageType,
       conversationId: activeChat._id,
       createdAt: new Date(),
       pending: true,
@@ -115,8 +128,15 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
     setChatMessages((prev) => [...prev, tempMessage]);
 
     // Clear input field immediately
-    const sentMessage = message.trim();
-    setMessage("");
+    const sentMessage = messageToSend;
+    if (messageType === "text") {
+      setMessage("");
+    }
+
+    // Close emoji picker if it was open
+    if (showEmojiPicker) {
+      setShowEmojiPicker(false);
+    }
 
     // Scroll to the new message
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -132,6 +152,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           receiver,
           message: sentMessage,
           conversationId: activeChat._id,
+          messageType,
         }),
         credentials: "include",
       });
@@ -157,6 +178,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           message: sentMessage,
           conversationId: activeChat._id,
           messageId: data._id,
+          messageType,
         });
       } else {
         // Mark the message as failed
@@ -189,6 +211,131 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Check file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image size should not exceed 2MB");
+      return;
+    }
+
+    // Check file type
+    if (!file.type.startsWith("image/")) {
+      toast.error("Only image files are allowed");
+      return;
+    }
+
+    const receiver = activeChat.participants.find(
+      (username) => username !== authUser.username,
+    );
+
+    if (!receiver) {
+      toast.error("Cannot determine message recipient");
+      return;
+    }
+
+    // Create form data
+    const formData = new FormData();
+    formData.append("image", file);
+    formData.append("receiver", receiver);
+    formData.append("conversationId", activeChat._id);
+
+    // Create a temporary message
+    const tempMessage = {
+      _id: `temp-${Date.now()}`,
+      sender: authUser.username,
+      receiver,
+      message: "Sending image...",
+      messageType: "image",
+      conversationId: activeChat._id,
+      createdAt: new Date(),
+      pending: true,
+    };
+
+    // Add temporary message
+    setChatMessages((prev) => [...prev, tempMessage]);
+
+    try {
+      setUploading(true);
+      const response = await fetch("/api/chat/messages/image", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Replace temp message with actual message
+        setChatMessages((prev) =>
+          prev.map((msg) => (msg._id === tempMessage._id ? data : msg)),
+        );
+
+        // Update conversation's last message
+        handleNewMessage({
+          ...data,
+          createdAt: new Date(),
+        });
+
+        // Emit message via socket
+        socket.emit("sendMessage", {
+          sender: authUser.username,
+          receiver,
+          message: "Sent an image",
+          conversationId: activeChat._id,
+          messageId: data._id,
+          messageType: "image",
+          imageUrl: data.imageUrl,
+        });
+      } else {
+        // Mark message as failed
+        setChatMessages((prev) =>
+          prev.map((msg) =>
+            msg._id === tempMessage._id
+              ? { ...msg, failed: true, pending: false }
+              : msg,
+          ),
+        );
+        toast.error(data.error || "Failed to upload image");
+      }
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      setChatMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === tempMessage._id
+            ? { ...msg, failed: true, pending: false }
+            : msg,
+        ),
+      );
+      toast.error("Something went wrong while uploading image");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const onEmojiClick = (emojiObject) => {
+    sendMessage(new Event("submit"), emojiObject);
+  };
+
+  // Handle clicks outside of emoji picker to close it
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   if (!activeChat) {
     return (
@@ -252,7 +399,20 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                         : "bg-gray-700 text-gray-100 rounded-tl-none"
                     } ${msg.pending ? "opacity-70" : ""} ${msg.failed ? "border border-red-500" : ""}`}
                   >
-                    <div>{msg.message}</div>
+                    {msg.messageType === "image" ? (
+                      <div>
+                        <img
+                          src={msg.imageUrl}
+                          alt="Shared screenshot"
+                          className="max-w-full rounded-md cursor-pointer"
+                          onClick={() => window.open(msg.imageUrl, "_blank")}
+                        />
+                      </div>
+                    ) : msg.messageType === "emoji" ? (
+                      <div className="text-4xl">{msg.message}</div>
+                    ) : (
+                      <div>{msg.message}</div>
+                    )}
                     <div
                       className={`text-xs mt-1 flex items-center ${isCurrentUser ? "text-blue-200" : "text-gray-400"}`}
                     >
@@ -294,31 +454,71 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       </div>
 
       {/* Message input */}
-      <form
-        onSubmit={sendMessage}
-        className="p-4 border-t border-gray-700 flex"
-      >
-        <input
-          type="text"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Type a message..."
-          className="flex-1 p-2 bg-gray-700 border border-gray-600 rounded-l-lg focus:outline-none focus:border-blue-500 text-gray-100"
-        />
-        <button
-          type="submit"
-          className="bg-blue-600 px-4 rounded-r-lg flex items-center justify-center hover:bg-blue-700 transition-colors"
-          disabled={!message.trim() || sendingMessage}
+      <div className="relative">
+        {showEmojiPicker && (
+          <div
+            className="absolute bottom-full right-0 mb-2"
+            ref={emojiPickerRef}
+          >
+            <Picker onEmojiClick={onEmojiClick} />
+          </div>
+        )}
+        <form
+          onSubmit={(e) => sendMessage(e)}
+          className="p-4 border-t border-gray-700 flex items-center"
         >
-          {sendingMessage ? (
-            <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
-          ) : (
-            <IoSend
-              className={message.trim() ? "text-white" : "text-gray-300"}
-            />
-          )}
-        </button>
-      </form>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current.click()}
+            disabled={uploading}
+            className="p-2 mr-2 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-full transition-colors"
+            title="Send Screenshot (max 2MB)"
+          >
+            {uploading ? (
+              <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
+            ) : (
+              <BiImageAdd size={20} />
+            )}
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImageUpload}
+            accept="image/*"
+            style={{ display: "none" }}
+          />
+
+          <button
+            type="button"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className="p-2 mr-2 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-full transition-colors"
+            title="Send Emoji"
+          >
+            <MdEmojiEmotions size={20} />
+          </button>
+
+          <input
+            type="text"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Type a message..."
+            className="flex-1 p-2 bg-gray-700 border border-gray-600 rounded-l-lg focus:outline-none focus:border-blue-500 text-gray-100"
+          />
+          <button
+            type="submit"
+            className="bg-blue-600 px-4 rounded-r-lg flex items-center justify-center hover:bg-blue-700 transition-colors"
+            disabled={!message.trim() || sendingMessage}
+          >
+            {sendingMessage ? (
+              <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
+            ) : (
+              <IoSend
+                className={message.trim() ? "text-white" : "text-gray-300"}
+              />
+            )}
+          </button>
+        </form>
+      </div>
     </div>
   );
 };

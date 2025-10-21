@@ -110,7 +110,7 @@ const ChatSidebar = ({
   };
 
   return (
-    <div className="w-1/3 border-r border-gray-700 text-gray-100 h-screen overflow-y-auto bg-glass">
+    <div className="w-1/3 border-r border-gray-700 rounded-lg text-gray-100 h-screen overflow-y-auto bg-glass">
       <div className="p-4 border-b border-gray-700">
         <h2 className="text-xl font-bold mb-4 flex items-center">
           <IoChatboxEllipses className="mr-2" /> Chats

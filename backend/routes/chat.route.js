@@ -4,6 +4,12 @@ import Message from "../models/message.model.js";
 import Conversation from "../models/conversation.model.js";
 import User from "../models/user.model.js";
 import ensureAuthenticated from "../middleware/ensureAuthenticated.js";
+import { upload, uploadToCloudinary } from "../utils/imageUpload.js";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
@@ -119,10 +125,10 @@ router.get("/conversation/:username", ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Send a new message
+// Send a new text or emoji message
 router.post("/messages", ensureAuthenticated, async (req, res) => {
   try {
-    const { receiver, message, conversationId } = req.body;
+    const { receiver, message, conversationId, messageType } = req.body;
     const sender = req.user.username;
 
     if (!receiver || !message || !conversationId) {
@@ -150,12 +156,14 @@ router.post("/messages", ensureAuthenticated, async (req, res) => {
       receiver,
       message,
       conversationId,
+      messageType: messageType || "text", // Default to text if not specified
     });
 
     await newMessage.save();
 
     // Update the conversation with last message
-    conversation.lastMessage = message;
+    conversation.lastMessage =
+      messageType === "emoji" ? `${message} (emoji)` : message;
     conversation.lastMessageTime = new Date();
     await conversation.save();
 
@@ -165,6 +173,69 @@ router.post("/messages", ensureAuthenticated, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+// Send an image message
+router.post(
+  "/messages/image",
+  ensureAuthenticated,
+  upload.single("image"),
+  async (req, res) => {
+    try {
+      const { receiver, conversationId } = req.body;
+      const sender = req.user.username;
+
+      if (!receiver || !conversationId || !req.file) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      // Verify conversation exists and both users are participants
+      const conversation = await Conversation.findById(conversationId);
+      if (!conversation) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+
+      if (
+        !conversation.participants.includes(sender) ||
+        !conversation.participants.includes(receiver)
+      ) {
+        return res
+          .status(403)
+          .json({
+            error: "Not authorized to send message in this conversation",
+          });
+      }
+
+      // Upload image to Cloudinary
+      const uploadResult = await uploadToCloudinary(req.file.path);
+
+      if (!uploadResult.success) {
+        return res.status(500).json({ error: "Failed to upload image" });
+      }
+
+      // Create new message
+      const newMessage = new Message({
+        sender,
+        receiver,
+        message: "Sent an image",
+        conversationId,
+        messageType: "image",
+        imageUrl: uploadResult.url,
+      });
+
+      await newMessage.save();
+
+      // Update the conversation with last message
+      conversation.lastMessage = "Sent an image";
+      conversation.lastMessageTime = new Date();
+      await conversation.save();
+
+      res.status(201).json(newMessage);
+    } catch (error) {
+      console.error("Error in sending image message:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
 
 // Get all users for chat (for displaying potential chat partners)
 router.get("/users", ensureAuthenticated, async (req, res) => {
