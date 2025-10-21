@@ -11,11 +11,28 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Configure cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+const cloudinaryConfigured =
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
+  process.env.CLOUDINARY_API_SECRET;
+
+if (cloudinaryConfigured) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+} else {
+  console.warn(
+    "Cloudinary credentials missing. Image uploads will not work properly.",
+  );
+}
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, "..", "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 // Setup multer storage
 const storage = multer.diskStorage({
@@ -24,7 +41,7 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + "-" + file.originalname.replace(/\s+/g, "-"));
-  }
+  },
 });
 
 // Filter for valid file types
@@ -40,13 +57,26 @@ const fileFilter = (req, file, cb) => {
 export const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 2 * 1024 * 1024 // 2MB limit
+    fileSize: 2 * 1024 * 1024, // 2MB limit
   },
-  fileFilter: fileFilter
+  fileFilter: fileFilter,
 });
 
 // Function to upload file to Cloudinary
 export const uploadToCloudinary = async (filePath) => {
+  // Check if Cloudinary is properly configured
+  if (!cloudinaryConfigured) {
+    // If Cloudinary is not configured, return error
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    return {
+      success: false,
+      error:
+        "Cloudinary credentials not configured. Please contact administrator.",
+    };
+  }
+
   try {
     const result = await cloudinary.uploader.upload(filePath, {
       folder: "github-screenshots",
@@ -61,7 +91,7 @@ export const uploadToCloudinary = async (filePath) => {
     return {
       success: true,
       url: result.secure_url,
-      public_id: result.public_id
+      public_id: result.public_id,
     };
   } catch (error) {
     // Delete the file from local storage in case of error
@@ -70,7 +100,7 @@ export const uploadToCloudinary = async (filePath) => {
     }
     return {
       success: false,
-      error: error.message
+      error: error.message,
     };
   }
 };

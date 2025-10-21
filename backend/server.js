@@ -75,19 +75,32 @@ io.on("connection", (socket) => {
       imageUrl,
     }) => {
       const receiverSocketId = onlineUsers.get(receiver);
+
+      // Create the message object with all necessary fields
+      const messageData = {
+        sender,
+        message,
+        conversationId,
+        createdAt: new Date(),
+        _id: messageId,
+        messageType: messageType || "text",
+      };
+
+      // Only add imageUrl if it exists and message type is image
+      if (messageType === "image" && imageUrl) {
+        messageData.imageUrl = imageUrl;
+      }
+
       if (receiverSocketId) {
-        io.to(receiverSocketId).emit("receiveMessage", {
-          sender,
-          message,
-          conversationId,
-          createdAt: new Date(),
-          _id: messageId,
-          messageType,
-          imageUrl,
-        });
+        // Send to receiver
+        io.to(receiverSocketId).emit("receiveMessage", messageData);
 
         // Send delivery confirmation back to sender
         socket.emit("messageDelivered", messageId);
+      } else {
+        console.log(
+          `User ${receiver} is not online. Message will be delivered when they connect.`,
+        );
       }
     },
   );

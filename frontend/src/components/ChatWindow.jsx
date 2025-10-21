@@ -97,8 +97,9 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
     e.preventDefault();
 
     // Use emoji if provided, otherwise use text message
-    let messageToSend = emojiObject ? emojiObject.emoji : message.trim();
-    let messageType = emojiObject ? "emoji" : "text";
+    let messageToSend =
+      emojiObject && emojiObject.emoji ? emojiObject.emoji : message.trim();
+    let messageType = emojiObject && emojiObject.emoji ? "emoji" : "text";
 
     if ((!messageToSend && messageType === "text") || !activeChat) return;
 
@@ -212,9 +213,14 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
+  const handleImageUpload = async (e, retryFile = null) => {
+    const file = retryFile || e?.target?.files?.[0];
     if (!file) return;
+
+    // Clear file input value to allow re-uploading the same file
+    if (fileInputRef.current && !retryFile) {
+      fileInputRef.current.value = "";
+    }
 
     // Check file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
@@ -252,6 +258,8 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       messageType: "image",
       conversationId: activeChat._id,
       createdAt: new Date(),
+      file: file, // Store file reference for potential retry
+      createdAt: new Date(),
       pending: true,
     };
 
@@ -288,14 +296,14 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           conversationId: activeChat._id,
           messageId: data._id,
           messageType: "image",
-          imageUrl: data.imageUrl,
+          imageUrl: data.imageUrl || null,
         });
       } else {
         // Mark message as failed
         setChatMessages((prev) =>
           prev.map((msg) =>
             msg._id === tempMessage._id
-              ? { ...msg, failed: true, pending: false }
+              ? { ...msg, failed: true, pending: false, file: tempMessage.file }
               : msg,
           ),
         );
@@ -306,7 +314,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       setChatMessages((prev) =>
         prev.map((msg) =>
           msg._id === tempMessage._id
-            ? { ...msg, failed: true, pending: false }
+            ? { ...msg, failed: true, pending: false, file: tempMessage.file }
             : msg,
         ),
       );
@@ -316,8 +324,25 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
     }
   };
 
+  // Function to retry failed image upload
+  const retryImageUpload = (failedMsg) => {
+    if (failedMsg.file) {
+      // Remove the failed message
+      setChatMessages((prev) =>
+        prev.filter((msg) => msg._id !== failedMsg._id),
+      );
+
+      // Try upload again with the same file
+      handleImageUpload(null, failedMsg.file);
+    } else {
+      toast.error("Cannot retry upload - original file not available");
+    }
+  };
+
   const onEmojiClick = (emojiObject) => {
-    sendMessage(new Event("submit"), emojiObject);
+    if (emojiObject && emojiObject.emoji) {
+      sendMessage(new Event("submit"), emojiObject);
+    }
   };
 
   // Handle clicks outside of emoji picker to close it
@@ -399,7 +424,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                         : "bg-gray-700 text-gray-100 rounded-tl-none"
                     } ${msg.pending ? "opacity-70" : ""} ${msg.failed ? "border border-red-500" : ""}`}
                   >
-                    {msg.messageType === "image" ? (
+                    {msg.messageType === "image" && msg.imageUrl ? (
                       <div>
                         <img
                           src={msg.imageUrl}
@@ -407,6 +432,18 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                           className="max-w-full rounded-md cursor-pointer"
                           onClick={() => window.open(msg.imageUrl, "_blank")}
                         />
+                      </div>
+                    ) : msg.messageType === "image" && msg.failed ? (
+                      <div className="text-center p-2">
+                        <div className="text-red-400 mb-2">
+                          Failed to upload image
+                        </div>
+                        <button
+                          onClick={() => retryImageUpload(msg)}
+                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
+                        >
+                          Retry Upload
+                        </button>
                       </div>
                     ) : msg.messageType === "emoji" ? (
                       <div className="text-4xl">{msg.message}</div>
@@ -424,16 +461,18 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                       ) : msg.failed ? (
                         <span className="flex items-center">
                           <span className="text-red-300 mr-2">Failed</span>
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              sendMessage(e);
-                            }}
-                            className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 rounded"
-                          >
-                            Retry
-                          </button>
+                          {msg.messageType === "text" && (
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                sendMessage(e);
+                              }}
+                              className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 rounded"
+                            >
+                              Retry
+                            </button>
+                          )}
                         </span>
                       ) : (
                         formatMessageTime(msg.createdAt)
@@ -457,10 +496,10 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       <div className="relative">
         {showEmojiPicker && (
           <div
-            className="absolute bottom-full right-0 mb-2"
+            className="absolute bottom-full right-0 mb-2 z-10"
             ref={emojiPickerRef}
           >
-            <Picker onEmojiClick={onEmojiClick} />
+            <Picker onEmojiClick={onEmojiClick} width={300} height={400} />
           </div>
         )}
         <form

@@ -198,18 +198,42 @@ router.post(
         !conversation.participants.includes(sender) ||
         !conversation.participants.includes(receiver)
       ) {
+        return res.status(403).json({
+          error: "Not authorized to send message in this conversation",
+        });
+      }
+
+      // Check if file exists
+      if (!req.file) {
+        return res.status(400).json({ error: "No image file provided" });
+      }
+
+      // Check file size (double-check even though multer does this)
+      if (req.file.size > 2 * 1024 * 1024) {
         return res
-          .status(403)
-          .json({
-            error: "Not authorized to send message in this conversation",
-          });
+          .status(400)
+          .json({ error: "Image size should not exceed 2MB" });
+      }
+
+      // Check file type
+      if (!req.file.mimetype.startsWith("image/")) {
+        return res.status(400).json({ error: "Only image files are allowed" });
       }
 
       // Upload image to Cloudinary
-      const uploadResult = await uploadToCloudinary(req.file.path);
+      try {
+        const uploadResult = await uploadToCloudinary(req.file.path);
 
-      if (!uploadResult.success) {
-        return res.status(500).json({ error: "Failed to upload image" });
+        if (!uploadResult.success) {
+          return res
+            .status(500)
+            .json({ error: uploadResult.error || "Failed to upload image" });
+        }
+      } catch (error) {
+        console.error("Error in cloudinary upload:", error);
+        return res
+          .status(500)
+          .json({ error: "Failed to process image upload" });
       }
 
       // Create new message
@@ -232,6 +256,21 @@ router.post(
       res.status(201).json(newMessage);
     } catch (error) {
       console.error("Error in sending image message:", error);
+
+      // Check if error is related to file size (from multer)
+      if (error.code === "LIMIT_FILE_SIZE") {
+        return res
+          .status(413)
+          .json({ error: "Image size should not exceed 2MB" });
+      }
+
+      // Handle other multer errors
+      if (error.code && error.code.startsWith("LIMIT_")) {
+        return res
+          .status(400)
+          .json({ error: error.message || "Invalid file upload" });
+      }
+
       res.status(500).json({ error: "Internal server error" });
     }
   },
