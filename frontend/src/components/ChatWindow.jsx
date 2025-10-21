@@ -192,7 +192,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
 
   if (!activeChat) {
     return (
-      <div className="w-2/3 flex items-center justify-center h-screen bg-gray-800 text-gray-300">
+      <div className="w-2/3 flex items-center justify-center h-screen bg-glass text-gray-300">
         <div className="text-center">
           <div className="text-5xl mb-4">👋</div>
           <h2 className="text-2xl font-semibold">Select a conversation</h2>
@@ -218,7 +218,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
             className="w-10 h-10 rounded-full mr-3"
           />
         ) : (
-          <div className="w-10 h-10 rounded-full mr-3 bg-gray-700 flex items-center justify-center text-white font-medium">
+          <div className="w-10 h-10 rounded-full mr-3 bg-glass flex items-center justify-center text-white font-medium">
             {otherUser.username.charAt(0).toUpperCase()}
           </div>
         )}
