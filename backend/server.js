@@ -76,6 +76,13 @@ io.on("connection", (socket) => {
     }) => {
       const receiverSocketId = onlineUsers.get(receiver);
 
+      // Log incoming message data for debugging
+      console.log(`Socket message from ${sender} to ${receiver}:`, {
+        type: messageType,
+        id: messageId,
+        hasImage: !!imageUrl,
+      });
+
       // Create the message object with all necessary fields
       const messageData = {
         sender,
@@ -88,11 +95,17 @@ io.on("connection", (socket) => {
 
       // Only add imageUrl if it exists and message type is image
       if (messageType === "image" && imageUrl) {
+        console.log(
+          `Adding image URL to socket message: ${imageUrl.substring(0, 30)}...`,
+        );
         messageData.imageUrl = imageUrl;
       }
 
       if (receiverSocketId) {
         // Send to receiver
+        console.log(
+          `Sending message to ${receiver} (socket: ${receiverSocketId.substring(0, 8)}...)`,
+        );
         io.to(receiverSocketId).emit("receiveMessage", messageData);
 
         // Send delivery confirmation back to sender

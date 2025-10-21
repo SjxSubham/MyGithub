@@ -221,13 +221,23 @@ router.post(
       }
 
       // Upload image to Cloudinary
+      let imageUrl;
       try {
         const uploadResult = await uploadToCloudinary(req.file.path);
+        console.log("Cloudinary upload result:", uploadResult);
 
         if (!uploadResult.success) {
           return res
             .status(500)
             .json({ error: uploadResult.error || "Failed to upload image" });
+        }
+
+        imageUrl = uploadResult.url;
+
+        if (!imageUrl) {
+          return res
+            .status(500)
+            .json({ error: "No image URL returned from Cloudinary" });
         }
       } catch (error) {
         console.error("Error in cloudinary upload:", error);
@@ -243,17 +253,20 @@ router.post(
         message: "Sent an image",
         conversationId,
         messageType: "image",
-        imageUrl: uploadResult.url,
+        imageUrl: imageUrl,
       });
 
-      await newMessage.save();
+      console.log("Creating image message with URL:", imageUrl);
+
+      const savedMessage = await newMessage.save();
 
       // Update the conversation with last message
       conversation.lastMessage = "Sent an image";
       conversation.lastMessageTime = new Date();
       await conversation.save();
 
-      res.status(201).json(newMessage);
+      // Return the complete saved message document
+      res.status(201).json(savedMessage);
     } catch (error) {
       console.error("Error in sending image message:", error);
 

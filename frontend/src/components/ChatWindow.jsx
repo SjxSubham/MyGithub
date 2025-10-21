@@ -50,6 +50,8 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
 
     // Handle incoming message from socket
     const handleIncomingMessage = (data) => {
+      console.log("Received message via socket:", data);
+
       if (data.conversationId === activeChat._id) {
         // Check if we already have a pending message with the same content
         // This could happen if both users are online and the message is sent/received
@@ -61,7 +63,10 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
             msg.messageType === data.messageType,
         );
 
+        console.log("Message has pending match:", hasPendingMatch);
+
         if (!hasPendingMatch) {
+          console.log("Adding new message to chat:", data);
           setChatMessages((prev) => [...prev, data]);
         }
 
@@ -209,9 +214,36 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
   };
 
   const formatMessageTime = (timestamp) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch (error) {
+      console.error("Invalid timestamp:", timestamp, error);
+      return "Unknown time";
+    }
   };
+
+  // Add CSS for image errors
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.textContent = `
+      .image-error::after {
+        content: "❌ Error loading image";
+        display: block;
+        color: #f56565;
+        background-color: rgba(0,0,0,0.4);
+        padding: 4px 8px;
+        margin-top: 4px;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
 
   const handleImageUpload = async (e, retryFile = null) => {
     const file = retryFile || e?.target?.files?.[0];
@@ -229,7 +261,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
     }
 
     // Check file type
-    if (!file.type.startsWith("image/")) {
+    if (!file.type || !file.type.startsWith("image/")) {
       toast.error("Only image files are allowed");
       return;
     }
@@ -257,7 +289,6 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       message: "Sending image...",
       messageType: "image",
       conversationId: activeChat._id,
-      createdAt: new Date(),
       file: file, // Store file reference for potential retry
       createdAt: new Date(),
       pending: true,
@@ -288,6 +319,16 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           createdAt: new Date(),
         });
 
+        // Log the image URL from the response for debugging
+        console.log("Image upload response:", data);
+        console.log("Image URL from response:", data.imageUrl);
+
+        // Verify the imageUrl exists before sending via socket
+        if (!data.imageUrl) {
+          console.error("Missing imageUrl in server response:", data);
+          toast.error("Image uploaded but URL is missing. Please try again.");
+        }
+
         // Emit message via socket
         socket.emit("sendMessage", {
           sender: authUser.username,
@@ -296,7 +337,14 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           conversationId: activeChat._id,
           messageId: data._id,
           messageType: "image",
-          imageUrl: data.imageUrl || null,
+          imageUrl: data.imageUrl,
+        });
+
+        // Log what's being sent via socket
+        console.log("Sending via socket:", {
+          messageId: data._id,
+          messageType: "image",
+          imageUrl: data.imageUrl,
         });
       } else {
         // Mark message as failed
@@ -425,13 +473,42 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                     } ${msg.pending ? "opacity-70" : ""} ${msg.failed ? "border border-red-500" : ""}`}
                   >
                     {msg.messageType === "image" && msg.imageUrl ? (
-                      <div>
+                      <div className="image-message">
                         <img
                           src={msg.imageUrl}
                           alt="Shared screenshot"
-                          className="max-w-full rounded-md cursor-pointer"
+                          className="max-w-full rounded-md cursor-pointer hover:opacity-90 transition-opacity"
                           onClick={() => window.open(msg.imageUrl, "_blank")}
+                          onError={(e) => {
+                            console.error(
+                              "Image failed to load:",
+                              msg.imageUrl,
+                            );
+                            e.target.onerror = null;
+                            e.target.src =
+                              "https://via.placeholder.com/300x200?text=Image+Load+Failed";
+                            // Add error state to the message element
+                            e.target.parentNode.classList.add("image-error");
+                          }}
                         />
+                        <div className="mt-1 text-xs text-gray-400 flex items-center justify-between">
+                          <span>Click to view full size</span>
+                          <span
+                            className="text-blue-300 hover:underline cursor-pointer"
+                            onClick={() =>
+                              navigator.clipboard.writeText(msg.imageUrl)
+                            }
+                          >
+                            Copy URL
+                          </span>
+                        </div>
+                      </div>
+                    ) : msg.messageType === "image" && msg.pending ? (
+                      <div className="text-center p-2">
+                        <div className="flex items-center justify-center space-x-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-500"></div>
+                          <span>Uploading image...</span>
+                        </div>
                       </div>
                     ) : msg.messageType === "image" && msg.failed ? (
                       <div className="text-center p-2">
@@ -496,10 +573,16 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       <div className="relative">
         {showEmojiPicker && (
           <div
-            className="absolute bottom-full right-0 mb-2 z-10"
+            className="absolute bottom-full right-0 mb-2 z-10 shadow-lg rounded-lg bg-gray-800 border border-gray-700"
             ref={emojiPickerRef}
           >
-            <Picker onEmojiClick={onEmojiClick} width={300} height={400} />
+            <Picker
+              onEmojiClick={onEmojiClick}
+              width={300}
+              height={400}
+              theme="dark"
+              searchPlaceholder="Search emojis..."
+            />
           </div>
         )}
         <form
@@ -510,13 +593,18 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
             type="button"
             onClick={() => fileInputRef.current.click()}
             disabled={uploading}
-            className="p-2 mr-2 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-full transition-colors"
+            className={`p-2 mr-2 ${uploading ? "bg-blue-600" : "bg-gray-700"} text-gray-300 hover:bg-gray-600 rounded-full transition-colors relative`}
             title="Send Screenshot (max 2MB)"
           >
             {uploading ? (
               <div className="w-5 h-5 border-t-2 border-b-2 border-white rounded-full animate-spin"></div>
             ) : (
-              <BiImageAdd size={20} />
+              <>
+                <BiImageAdd size={20} />
+                <span className="absolute -top-1 -right-1 text-xs bg-blue-500 text-white rounded-full px-1 animate-pulse">
+                  2MB
+                </span>
+              </>
             )}
           </button>
           <input
@@ -530,7 +618,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           <button
             type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="p-2 mr-2 bg-gray-700 text-gray-300 hover:bg-gray-600 rounded-full transition-colors"
+            className={`p-2 mr-2 ${showEmojiPicker ? "bg-blue-600" : "bg-gray-700"} text-gray-300 hover:bg-gray-600 rounded-full transition-colors`}
             title="Send Emoji"
           >
             <MdEmojiEmotions size={20} />
