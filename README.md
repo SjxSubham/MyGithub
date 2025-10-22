@@ -1,4 +1,4 @@
-# MyGithub: Explore GitHub in a Whole New Way! 
+# MyGithub: Explore GitHub in a Whole New Way!
 ## Overview 
 MyGithub is a web application that brings the power of GitHub to your fingertips. Whether you’re a developer, a curious learner, or a seasoned open-source enthusiast, MyGithub offers a seamless experience for exploring user profiles, repositories, and more.
 
