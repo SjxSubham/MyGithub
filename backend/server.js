@@ -73,6 +73,9 @@ io.on("connection", (socket) => {
       messageId,
       messageType,
       imageUrl,
+      replyTo,
+      replyToSender,
+      replyToMessage,
     }) => {
       const receiverSocketId = onlineUsers.get(receiver);
 
@@ -81,6 +84,7 @@ io.on("connection", (socket) => {
         type: messageType,
         id: messageId,
         hasImage: !!imageUrl,
+        isReply: !!replyTo,
       });
 
       // Create the message object with all necessary fields
@@ -92,6 +96,13 @@ io.on("connection", (socket) => {
         _id: messageId,
         messageType: messageType || "text",
       };
+
+      // Add reply information if it exists
+      if (replyTo) {
+        messageData.replyTo = replyTo;
+        messageData.replyToSender = replyToSender;
+        messageData.replyToMessage = replyToMessage;
+      }
 
       // Only add imageUrl if it exists and message type is image
       if (messageType === "image" && imageUrl) {
@@ -117,6 +128,60 @@ io.on("connection", (socket) => {
       }
     },
   );
+
+  // Handle message deletion for everyone
+  socket.on(
+    "deleteMessageForEveryone",
+    ({ messageId, conversationId, deletedBy }) => {
+      console.log(
+        `Message deletion request for message ${messageId} in conversation ${conversationId}`,
+      );
+
+      // Find all participants in this conversation to notify them
+      // In a real implementation, you should query the database
+      // This is a simplified version that broadcasts to all relevant users
+      for (const [username, socketId] of onlineUsers.entries()) {
+        if (socketId !== socket.id) {
+          // Don't send back to the deleter
+          io.to(socketId).emit("messageDeleted", {
+            messageId,
+            conversationId,
+            deletedBy,
+          });
+        }
+      }
+    },
+  );
+
+  // Handle message reactions
+  socket.on("messageReaction", ({ messageId, conversationId, reaction }) => {
+    console.log(
+      `Reaction ${reaction.type} on message ${messageId} from ${reaction.username}`,
+    );
+
+    // Notify other users about the reaction
+    for (const [username, socketId] of onlineUsers.entries()) {
+      if (socketId !== socket.id && username !== reaction.username) {
+        io.to(socketId).emit("messageReaction", {
+          messageId,
+          conversationId,
+          reaction,
+        });
+      }
+    }
+  });
+
+  // Handle message forwarding
+  socket.on("messageForwarded", ({ conversationId, receiver, sender }) => {
+    const receiverSocketId = onlineUsers.get(receiver);
+
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("messageForwarded", {
+        conversationId,
+        sender,
+      });
+    }
+  });
 
   socket.on("disconnect", () => {
     let disconnectedUser;

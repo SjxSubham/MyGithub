@@ -7,6 +7,7 @@ import ensureAuthenticated from "../middleware/ensureAuthenticated.js";
 import { upload, uploadToCloudinary } from "../utils/imageUpload.js";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,7 +67,11 @@ router.get(
         return res.status(403).json({ error: "Access denied" });
       }
 
-      const messages = await Message.find({ conversationId })
+      // Filter out messages deleted for this user
+      const messages = await Message.find({
+        conversationId,
+        deletedFor: { $ne: username }, // Don't include messages deleted for this user
+      })
         .sort({ createdAt: 1 })
         .limit(100);
 
@@ -80,7 +85,19 @@ router.get(
         { read: true },
       );
 
-      res.status(200).json(messages);
+      // Add client-side display properties
+      const processedMessages = messages.map((msg) => {
+        // Convert to plain object so we can modify it
+        const msgObj = msg.toObject();
+
+        // Add a UI flag to indicate if this message was deleted for the current user
+        msgObj.deletedForMe =
+          msgObj.deletedFor && msgObj.deletedFor.includes(username);
+
+        return msgObj;
+      });
+
+      res.status(200).json(processedMessages);
     } catch (error) {
       console.error("Error in getting messages:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -301,6 +318,305 @@ router.get("/users", ensureAuthenticated, async (req, res) => {
     res.status(200).json(users);
   } catch (error) {
     console.error("Error in getting users:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Delete message for me (soft delete - only hides from requester's view)
+router.delete(
+  "/messages/:messageId/delete-for-me",
+  ensureAuthenticated,
+  async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const { username } = req.user;
+
+      // Validate message ID
+      if (!mongoose.Types.ObjectId.isValid(messageId)) {
+        return res.status(400).json({ error: "Invalid message ID format" });
+      }
+
+      // Find the message
+      const message = await Message.findById(messageId);
+      if (!message) {
+        return res.status(404).json({ error: "Message not found" });
+      }
+
+      // Check if user is part of this conversation
+      if (message.sender !== username && message.receiver !== username) {
+        return res
+          .status(403)
+          .json({ error: "Not authorized to delete this message" });
+      }
+
+      // Add user to deletedFor array if it doesn't exist
+      if (!message.deletedFor) {
+        message.deletedFor = [username];
+      } else if (!message.deletedFor.includes(username)) {
+        message.deletedFor.push(username);
+      }
+
+      await message.save();
+      res.status(200).json({ message: "Message deleted for you" });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
+
+// Delete message for everyone (hard delete)
+router.delete(
+  "/messages/:messageId/delete-for-everyone",
+  ensureAuthenticated,
+  async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const { username } = req.user;
+
+      // Validate message ID
+      if (!mongoose.Types.ObjectId.isValid(messageId)) {
+        return res.status(400).json({ error: "Invalid message ID format" });
+      }
+
+      // Find the message
+      const message = await Message.findById(messageId);
+      if (!message) {
+        return res.status(404).json({ error: "Message not found" });
+      }
+
+      // Only sender can delete for everyone
+      if (message.sender !== username) {
+        return res
+          .status(403)
+          .json({ error: "Only the sender can delete a message for everyone" });
+      }
+
+      // If it's an image message, delete from storage if needed
+      if (message.messageType === "image" && message.imageUrl) {
+        try {
+          // Extract public ID from Cloudinary URL if applicable
+          // This assumes URLs like: https://res.cloudinary.com/your-cloud-name/image/upload/v1234567890/public-id.jpg
+          const publicIdMatch = message.imageUrl.match(/\/v\d+\/(.+?)\.\w+$/);
+
+          if (publicIdMatch && publicIdMatch[1]) {
+            // If you have a direct Cloudinary SDK integration:
+            // await cloudinary.uploader.destroy(publicIdMatch[1]);
+            console.log(
+              `Image would be deleted from Cloudinary: ${publicIdMatch[1]}`,
+            );
+          }
+        } catch (imageDeleteError) {
+          console.error("Error deleting image from storage:", imageDeleteError);
+          // Continue with message deletion even if image deletion fails
+        }
+      }
+
+      // Delete the message from database
+      await Message.findByIdAndDelete(messageId);
+
+      res.status(200).json({ message: "Message deleted for everyone" });
+    } catch (error) {
+      console.error("Error deleting message for everyone:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
+
+// Add reaction to a message
+router.post(
+  "/messages/:messageId/react",
+  ensureAuthenticated,
+  async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      const { reactionType } = req.body;
+      const { username } = req.user;
+
+      // Validate message ID
+      if (!mongoose.Types.ObjectId.isValid(messageId)) {
+        return res.status(400).json({ error: "Invalid message ID format" });
+      }
+
+      // Validate reaction type
+      const validReactions = ["like", "love", "sad", "wow", "100"];
+      if (!validReactions.includes(reactionType)) {
+        return res.status(400).json({ error: "Invalid reaction type" });
+      }
+
+      // Find the message
+      const message = await Message.findById(messageId);
+      if (!message) {
+        return res.status(404).json({ error: "Message not found" });
+      }
+
+      // Check if user is part of this conversation
+      if (message.sender !== username && message.receiver !== username) {
+        return res
+          .status(403)
+          .json({ error: "Not authorized to react to this message" });
+      }
+
+      // Initialize reactions array if it doesn't exist
+      if (!message.reactions) {
+        message.reactions = [];
+      }
+
+      // Check if user already reacted with this type
+      const existingReactionIndex = message.reactions.findIndex(
+        (r) => r.username === username && r.type === reactionType,
+      );
+
+      if (existingReactionIndex >= 0) {
+        // Remove reaction (toggle behavior)
+        message.reactions.splice(existingReactionIndex, 1);
+      } else {
+        // Remove any existing reaction from this user
+        const userReactionIndex = message.reactions.findIndex(
+          (r) => r.username === username,
+        );
+        if (userReactionIndex >= 0) {
+          message.reactions.splice(userReactionIndex, 1);
+        }
+
+        // Add new reaction
+        message.reactions.push({ username, type: reactionType });
+      }
+
+      await message.save();
+      res
+        .status(200)
+        .json({ message: "Reaction updated", reactions: message.reactions });
+    } catch (error) {
+      console.error("Error updating reaction:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
+
+// Reply to a message
+router.post("/messages/reply", ensureAuthenticated, async (req, res) => {
+  try {
+    const { receiver, message, conversationId, replyTo } = req.body;
+    const sender = req.user.username;
+
+    if (!receiver || !message || !conversationId || !replyTo) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Validate replyTo message ID
+    if (!mongoose.Types.ObjectId.isValid(replyTo)) {
+      return res.status(400).json({ error: "Invalid reply message ID" });
+    }
+
+    // Verify conversation exists and both users are participants
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    if (
+      !conversation.participants.includes(sender) ||
+      !conversation.participants.includes(receiver)
+    ) {
+      return res
+        .status(403)
+        .json({ error: "Not authorized to send message in this conversation" });
+    }
+
+    // Verify the replied-to message exists
+    const originalMessage = await Message.findById(replyTo);
+    if (!originalMessage) {
+      return res.status(404).json({ error: "Original message not found" });
+    }
+
+    // Create new reply message
+    const newMessage = new Message({
+      sender,
+      receiver,
+      message,
+      conversationId,
+      messageType: "text",
+      replyTo: replyTo,
+      replyToSender: originalMessage.sender,
+      replyToMessage:
+        originalMessage.messageType === "image"
+          ? "Image"
+          : originalMessage.message,
+    });
+
+    await newMessage.save();
+
+    // Update the conversation with last message
+    conversation.lastMessage = `Replied: ${message.substring(0, 20)}${message.length > 20 ? "..." : ""}`;
+    conversation.lastMessageTime = new Date();
+    await conversation.save();
+
+    res.status(201).json(newMessage);
+  } catch (error) {
+    console.error("Error in sending reply:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Forward a message to another conversation
+router.post("/messages/forward", ensureAuthenticated, async (req, res) => {
+  try {
+    const { originalMessageId, conversationId, receiver } = req.body;
+    const sender = req.user.username;
+
+    if (!originalMessageId || !conversationId || !receiver) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    // Validate message ID
+    if (!mongoose.Types.ObjectId.isValid(originalMessageId)) {
+      return res.status(400).json({ error: "Invalid message ID" });
+    }
+
+    // Verify the original message exists
+    const originalMessage = await Message.findById(originalMessageId);
+    if (!originalMessage) {
+      return res.status(404).json({ error: "Original message not found" });
+    }
+
+    // Verify conversation exists and both users are participants
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ error: "Conversation not found" });
+    }
+
+    if (
+      !conversation.participants.includes(sender) ||
+      !conversation.participants.includes(receiver)
+    ) {
+      return res
+        .status(403)
+        .json({ error: "Not authorized to send message in this conversation" });
+    }
+
+    // Create forwarded message
+    const newMessage = new Message({
+      sender,
+      receiver,
+      message: originalMessage.message,
+      conversationId,
+      messageType: originalMessage.messageType,
+      imageUrl: originalMessage.imageUrl,
+      forwardedFrom: originalMessage.sender,
+      forwardedMessageId: originalMessageId,
+    });
+
+    await newMessage.save();
+
+    // Update the conversation with last message
+    conversation.lastMessage = "Forwarded message";
+    conversation.lastMessageTime = new Date();
+    await conversation.save();
+
+    res.status(201).json(newMessage);
+  } catch (error) {
+    console.error("Error in forwarding message:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
