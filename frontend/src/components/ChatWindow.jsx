@@ -3,6 +3,10 @@ import { IoSend } from "react-icons/io5";
 import { toast } from "react-hot-toast";
 import { BiImageAdd } from "react-icons/bi";
 import { MdEmojiEmotions } from "react-icons/md";
+import { BsThreeDotsVertical } from "react-icons/bs";
+import { FaReply, FaForward, FaTrash } from "react-icons/fa";
+import { AiFillHeart } from "react-icons/ai";
+import { BiSad, BiWinkSmile, BiHappy } from "react-icons/bi";
 import Picker from "emoji-picker-react";
 
 const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
@@ -12,9 +16,15 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [activeMessageOptions, setActiveMessageOptions] = useState(null);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [forwardingMessage, setForwardingMessage] = useState(null);
+  // We'll use forwardingMessage state to determine if dialog should be shown
+  const [deletingMessageId, setDeletingMessageId] = useState(null);
   const messageEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const emojiPickerRef = useRef(null);
+  const optionsMenuRef = useRef(null);
 
   // Fetch chat messages when active chat changes
   useEffect(() => {
@@ -84,12 +94,60 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       );
     };
 
+    // Handle message deleted for everyone
+    const handleMessageDeleted = (data) => {
+      if (data.conversationId === activeChat._id) {
+        setChatMessages((prev) =>
+          prev.filter((msg) => msg._id !== data.messageId),
+        );
+        toast.info("A message was deleted");
+      }
+    };
+
+    // Handle message reactions
+    const handleMessageReaction = (data) => {
+      if (data.conversationId === activeChat._id) {
+        setChatMessages((prev) =>
+          prev.map((msg) => {
+            if (msg._id === data.messageId) {
+              const existingReactions = msg.reactions || [];
+              const userReactionIndex = existingReactions.findIndex(
+                (r) =>
+                  r.username === data.reaction.username &&
+                  r.type === data.reaction.type,
+              );
+
+              let updatedReactions;
+              if (userReactionIndex >= 0) {
+                updatedReactions = [...existingReactions];
+                updatedReactions.splice(userReactionIndex, 1);
+              } else {
+                updatedReactions = [
+                  ...existingReactions.filter(
+                    (r) => r.username !== data.reaction.username,
+                  ),
+                  data.reaction,
+                ];
+              }
+
+              return { ...msg, reactions: updatedReactions };
+            }
+            return msg;
+          }),
+        );
+      }
+    };
+
     socket.on("receiveMessage", handleIncomingMessage);
     socket.on("messageDelivered", handleMessageDelivered);
+    socket.on("messageDeleted", handleMessageDeleted);
+    socket.on("messageReaction", handleMessageReaction);
 
     return () => {
       socket.off("receiveMessage", handleIncomingMessage);
       socket.off("messageDelivered", handleMessageDelivered);
+      socket.off("messageDeleted", handleMessageDeleted);
+      socket.off("messageReaction", handleMessageReaction);
     };
   }, [socket, activeChat, handleNewMessage, chatMessages]);
 
@@ -402,6 +460,14 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       ) {
         setShowEmojiPicker(false);
       }
+
+      if (
+        optionsMenuRef.current &&
+        !optionsMenuRef.current.contains(event.target) &&
+        !event.target.closest(".message-options-trigger")
+      ) {
+        setActiveMessageOptions(null);
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -409,6 +475,280 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Function to delete messages
+  const deleteMessage = async (messageId, deleteType) => {
+    if (!messageId) return;
+
+    try {
+      setDeletingMessageId(messageId);
+
+      const endpoint =
+        deleteType === "everyone"
+          ? `/api/chat/messages/${messageId}/delete-for-everyone`
+          : `/api/chat/messages/${messageId}/delete-for-me`;
+
+      const response = await fetch(endpoint, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (deleteType === "everyone") {
+          // Remove from UI
+          setChatMessages((prev) =>
+            prev.filter((msg) => msg._id !== messageId),
+          );
+
+          // Notify other users via socket
+          socket.emit("deleteMessageForEveryone", {
+            messageId,
+            conversationId: activeChat._id,
+          });
+
+          toast.success("Message deleted for everyone");
+        } else {
+          // Mark as deleted for this user only (hide in UI)
+          setChatMessages((prev) =>
+            prev.map((msg) =>
+              msg._id === messageId ? { ...msg, deletedForMe: true } : msg,
+            ),
+          );
+          toast.success("Message deleted for you");
+        }
+      } else {
+        toast.error(data.error || "Failed to delete message");
+      }
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      toast.error("Something went wrong");
+    } finally {
+      setDeletingMessageId(null);
+    }
+  };
+
+  // Function to add reactions to messages
+  const addReaction = async (messageId, reactionType) => {
+    if (!messageId) return;
+
+    try {
+      const response = await fetch(`/api/chat/messages/${messageId}/react`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          reactionType,
+        }),
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Update message in UI with reaction
+        setChatMessages((prev) =>
+          prev.map((msg) => {
+            if (msg._id === messageId) {
+              const existingReactions = msg.reactions || [];
+              // Check if user already reacted with this type
+              const userReactionIndex = existingReactions.findIndex(
+                (r) =>
+                  r.username === authUser.username && r.type === reactionType,
+              );
+
+              let updatedReactions;
+              if (userReactionIndex >= 0) {
+                // Remove reaction if already exists (toggle behavior)
+                updatedReactions = [...existingReactions];
+                updatedReactions.splice(userReactionIndex, 1);
+              } else {
+                // Add new reaction
+                updatedReactions = [
+                  ...existingReactions.filter(
+                    (r) => r.username !== authUser.username,
+                  ),
+                  { username: authUser.username, type: reactionType },
+                ];
+              }
+
+              return { ...msg, reactions: updatedReactions };
+            }
+            return msg;
+          }),
+        );
+
+        // Notify other users via socket
+        socket.emit("messageReaction", {
+          messageId,
+          conversationId: activeChat._id,
+          reaction: {
+            username: authUser.username,
+            type: reactionType,
+          },
+        });
+      } else {
+        toast.error(data.error || "Failed to add reaction");
+      }
+    } catch (error) {
+      console.error("Error adding reaction:", error);
+      toast.error("Something went wrong");
+    }
+  };
+
+  // Function to send reply to a message
+  const sendReply = async (e, originalMessage) => {
+    e.preventDefault();
+
+    const messageToSend = message.trim();
+    if (!messageToSend || !activeChat || !originalMessage) return;
+
+    // Get the receiver's username
+    const receiver = activeChat.participants.find(
+      (username) => username !== authUser.username,
+    );
+
+    if (!receiver) {
+      toast.error("Cannot determine message recipient");
+      return;
+    }
+
+    // Create a temporary message
+    const tempMessage = {
+      _id: `temp-${Date.now()}`,
+      sender: authUser.username,
+      receiver,
+      message: messageToSend,
+      messageType: "text",
+      conversationId: activeChat._id,
+      createdAt: new Date(),
+      pending: true,
+      replyTo: originalMessage._id,
+      replyToSender: originalMessage.sender,
+      replyToMessage:
+        originalMessage.messageType === "image"
+          ? "Image"
+          : originalMessage.message,
+    };
+
+    // Add temporary message
+    setChatMessages((prev) => [...prev, tempMessage]);
+
+    // Clear input and reply state
+    setMessage("");
+    setReplyingTo(null);
+
+    try {
+      setSendingMessage(true);
+      const response = await fetch("/api/chat/messages/reply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          receiver,
+          message: messageToSend,
+          conversationId: activeChat._id,
+          replyTo: originalMessage._id,
+        }),
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Replace temporary message
+        setChatMessages((prev) =>
+          prev.map((msg) => (msg._id === tempMessage._id ? data : msg)),
+        );
+
+        // Update last message
+        handleNewMessage({
+          ...data,
+          createdAt: new Date(),
+        });
+
+        // Emit via socket
+        socket.emit("sendMessage", {
+          sender: authUser.username,
+          receiver,
+          message: messageToSend,
+          conversationId: activeChat._id,
+          messageId: data._id,
+          messageType: "text",
+          replyTo: originalMessage._id,
+          replyToSender: originalMessage.sender,
+          replyToMessage:
+            originalMessage.messageType === "image"
+              ? "Image"
+              : originalMessage.message,
+        });
+      } else {
+        // Mark as failed
+        setChatMessages((prev) =>
+          prev.map((msg) =>
+            msg._id === tempMessage._id
+              ? { ...msg, failed: true, pending: false }
+              : msg,
+          ),
+        );
+        toast.error(data.error || "Failed to send reply");
+      }
+    } catch (error) {
+      console.error("Error sending reply:", error);
+      setChatMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === tempMessage._id
+            ? { ...msg, failed: true, pending: false }
+            : msg,
+        ),
+      );
+      toast.error("Something went wrong");
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  // Function to forward a message
+  const handleForwardMessage = async (targetConversationId, targetReceiver) => {
+    if (!forwardingMessage || !targetConversationId) return;
+
+    try {
+      const response = await fetch("/api/chat/messages/forward", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          originalMessageId: forwardingMessage._id,
+          conversationId: targetConversationId,
+          receiver: targetReceiver,
+        }),
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setForwardingMessage(null);
+        toast.success("Message forwarded successfully");
+
+        // Emit via socket
+        socket.emit("messageForwarded", {
+          ...data,
+          conversationId: targetConversationId,
+          receiver: targetReceiver,
+        });
+      } else {
+        toast.error(data.error || "Failed to forward message");
+      }
+    } catch (error) {
+      console.error("Error forwarding message:", error);
+      toast.error("Something went wrong");
+    }
+  };
 
   if (!activeChat) {
     return (
@@ -465,97 +805,302 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                   key={msg._id || index}
                   className={`flex ${isCurrentUser ? "justify-end" : "justify-start"}`}
                 >
-                  <div
-                    className={`max-w-[70%] rounded-lg p-3 ${
-                      isCurrentUser
-                        ? "bg-blue-600 text-white rounded-tr-none"
-                        : "bg-gray-700 text-gray-100 rounded-tl-none"
-                    } ${msg.pending ? "opacity-70" : ""} ${msg.failed ? "border border-red-500" : ""}`}
-                  >
-                    {msg.messageType === "image" && msg.imageUrl ? (
-                      <div className="image-message">
-                        <img
-                          src={msg.imageUrl}
-                          alt="Shared screenshot"
-                          className="max-w-full rounded-md cursor-pointer hover:opacity-90 transition-opacity"
-                          onClick={() => window.open(msg.imageUrl, "_blank")}
-                          onError={(e) => {
-                            console.error(
-                              "Image failed to load:",
-                              msg.imageUrl,
-                            );
-                            e.target.onerror = null;
-                            e.target.src =
-                              "https://via.placeholder.com/300x200?text=Image+Load+Failed";
-                            // Add error state to the message element
-                            e.target.parentNode.classList.add("image-error");
-                          }}
-                        />
-                        <div className="mt-1 text-xs text-gray-400 flex items-center justify-between">
-                          <span>Click to view full size</span>
-                          <span
-                            className="text-blue-300 hover:underline cursor-pointer"
-                            onClick={() =>
-                              navigator.clipboard.writeText(msg.imageUrl)
-                            }
-                          >
-                            Copy URL
-                          </span>
-                        </div>
-                      </div>
-                    ) : msg.messageType === "image" && msg.pending ? (
-                      <div className="text-center p-2">
-                        <div className="flex items-center justify-center space-x-2">
-                          <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-500"></div>
-                          <span>Uploading image...</span>
-                        </div>
-                      </div>
-                    ) : msg.messageType === "image" && msg.failed ? (
-                      <div className="text-center p-2">
-                        <div className="text-red-400 mb-2">
-                          Failed to upload image
-                        </div>
-                        <button
-                          onClick={() => retryImageUpload(msg)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
-                        >
-                          Retry Upload
-                        </button>
-                      </div>
-                    ) : msg.messageType === "emoji" ? (
-                      <div className="text-4xl">{msg.message}</div>
-                    ) : (
-                      <div>{msg.message}</div>
-                    )}
-                    <div
-                      className={`text-xs mt-1 flex items-center ${isCurrentUser ? "text-blue-200" : "text-gray-400"}`}
-                    >
-                      {msg.pending ? (
-                        <span className="flex items-center">
-                          Sending...
-                          <div className="ml-1 w-2 h-2 rounded-full bg-blue-200 animate-pulse"></div>
-                        </span>
-                      ) : msg.failed ? (
-                        <span className="flex items-center">
-                          <span className="text-red-300 mr-2">Failed</span>
-                          {msg.messageType === "text" && (
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                sendMessage(e);
-                              }}
-                              className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 rounded"
-                            >
-                              Retry
-                            </button>
-                          )}
-                        </span>
-                      ) : (
-                        formatMessageTime(msg.createdAt)
-                      )}
+                  {/* Skip rendering messages deleted for current user */}
+                  {msg.deletedForMe ? (
+                    <div className="text-gray-500 italic text-xs p-2">
+                      This message was deleted
                     </div>
-                  </div>
+                  ) : deletingMessageId === msg._id ? (
+                    <div className="relative max-w-[70%] rounded-lg p-3 bg-red-500 bg-opacity-20 text-white">
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                        <span>Deleting message...</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className={`relative max-w-[70%] rounded-lg p-3 group ${
+                        isCurrentUser
+                          ? "bg-blue-600 text-white rounded-tr-none"
+                          : "bg-gray-700 text-gray-100 rounded-tl-none"
+                      } ${msg.pending ? "opacity-70" : ""} ${msg.failed ? "border border-red-500" : ""}`}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setActiveMessageOptions(msg._id || index);
+                      }}
+                    >
+                      {/* Message options button */}
+                      {!msg.pending && !msg.failed && (
+                        <button
+                          onClick={() =>
+                            setActiveMessageOptions(
+                              activeMessageOptions === (msg._id || index)
+                                ? null
+                                : msg._id || index,
+                            )
+                          }
+                          className="absolute top-2 right-2 opacity-0 hover:opacity-100 focus:opacity-100 group-hover:opacity-100 transition-opacity message-options-trigger"
+                        >
+                          <BsThreeDotsVertical size={16} />
+                        </button>
+                      )}
+
+                      {/* Message options menu */}
+                      {activeMessageOptions === (msg._id || index) && (
+                        <div
+                          ref={optionsMenuRef}
+                          className="absolute z-10 bg-gray-800 rounded-md shadow-lg p-2 w-48 right-0 top-0"
+                        >
+                          <ul className="space-y-1">
+                            <li>
+                              <button
+                                onClick={() => {
+                                  setReplyingTo(msg);
+                                  setActiveMessageOptions(null);
+                                }}
+                                className="flex items-center w-full px-3 py-2 text-left hover:bg-gray-700 rounded-md transition-colors"
+                              >
+                                <FaReply className="mr-2" /> Reply
+                              </button>
+                            </li>
+                            <li>
+                              <button
+                                onClick={() => {
+                                  setForwardingMessage(msg);
+                                  setActiveMessageOptions(null);
+                                  toast.success(
+                                    "Select a conversation to forward to",
+                                  );
+                                }}
+                                className="flex items-center w-full px-3 py-2 text-left hover:bg-gray-700 rounded-md transition-colors"
+                              >
+                                <FaForward className="mr-2" /> Forward
+                              </button>
+                            </li>
+                            <li>
+                              <button
+                                onClick={() => {
+                                  deleteMessage(msg._id, "self");
+                                  setActiveMessageOptions(null);
+                                }}
+                                className="flex items-center w-full px-3 py-2 text-left hover:bg-gray-700 rounded-md transition-colors"
+                              >
+                                <FaTrash className="mr-2" /> Delete for me
+                              </button>
+                            </li>
+                            {isCurrentUser && (
+                              <li>
+                                <button
+                                  onClick={() => {
+                                    deleteMessage(msg._id, "everyone");
+                                    setActiveMessageOptions(null);
+                                  }}
+                                  className="flex items-center w-full px-3 py-2 text-left hover:bg-gray-700 rounded-md transition-colors"
+                                >
+                                  <FaTrash className="mr-2" /> Delete for
+                                  everyone
+                                </button>
+                              </li>
+                            )}
+                            <li className="border-t border-gray-700 pt-1 mt-1">
+                              <p className="px-3 py-1 text-xs text-gray-400">
+                                Reactions
+                              </p>
+                              <div className="flex justify-around pt-1">
+                                <button
+                                  onClick={() => {
+                                    addReaction(msg._id, "like");
+                                    setActiveMessageOptions(null);
+                                  }}
+                                  className="p-1 hover:bg-gray-700 rounded-full"
+                                >
+                                  <AiFillHeart
+                                    className="text-red-500"
+                                    size={18}
+                                  />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    addReaction(msg._id, "love");
+                                    setActiveMessageOptions(null);
+                                  }}
+                                  className="p-1 hover:bg-gray-700 rounded-full"
+                                >
+                                  <BiHappy
+                                    className="text-yellow-500"
+                                    size={18}
+                                  />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    addReaction(msg._id, "sad");
+                                    setActiveMessageOptions(null);
+                                  }}
+                                  className="p-1 hover:bg-gray-700 rounded-full"
+                                >
+                                  <BiSad className="text-blue-400" size={18} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    addReaction(msg._id, "wow");
+                                    setActiveMessageOptions(null);
+                                  }}
+                                  className="p-1 hover:bg-gray-700 rounded-full"
+                                >
+                                  <BiWinkSmile
+                                    className="text-green-400"
+                                    size={18}
+                                  />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    addReaction(msg._id, "100");
+                                    setActiveMessageOptions(null);
+                                  }}
+                                  className="p-1 hover:bg-gray-700 rounded-full text-xs font-bold"
+                                >
+                                  💯
+                                </button>
+                              </div>
+                            </li>
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Reply indicator */}
+                      {msg.replyTo && (
+                        <div className="bg-gray-600 p-1 rounded mb-2 text-xs text-gray-300 border-l-2 border-blue-400">
+                          <p className="font-semibold">
+                            Reply to {msg.replyToSender}
+                          </p>
+                          <p className="truncate">{msg.replyToMessage}</p>
+                        </div>
+                      )}
+                      {msg.messageType === "image" && msg.imageUrl ? (
+                        <div className="image-message">
+                          <img
+                            src={msg.imageUrl}
+                            alt="Shared screenshot"
+                            className="max-w-full rounded-md cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => window.open(msg.imageUrl, "_blank")}
+                            onError={(e) => {
+                              console.error(
+                                "Image failed to load:",
+                                msg.imageUrl,
+                              );
+                              e.target.onerror = null;
+                              e.target.src =
+                                "https://via.placeholder.com/300x200?text=Image+Load+Failed";
+                              // Add error state to the message element
+                              e.target.parentNode.classList.add("image-error");
+                            }}
+                          />
+                          <div className="mt-1 text-xs text-gray-400 flex items-center justify-between">
+                            <span>Click to view full size</span>
+                            <span
+                              className="text-blue-300 hover:underline cursor-pointer"
+                              onClick={() =>
+                                navigator.clipboard.writeText(msg.imageUrl)
+                              }
+                            >
+                              Copy URL
+                            </span>
+                          </div>
+                        </div>
+                      ) : msg.messageType === "image" && msg.pending ? (
+                        <div className="text-center p-2">
+                          <div className="flex items-center justify-center space-x-2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-500"></div>
+                            <span>Uploading image...</span>
+                          </div>
+                        </div>
+                      ) : msg.messageType === "image" && msg.failed ? (
+                        <div className="text-center p-2">
+                          <div className="text-red-400 mb-2">
+                            Failed to upload image
+                          </div>
+                          <button
+                            onClick={() => retryImageUpload(msg)}
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
+                          >
+                            Retry Upload
+                          </button>
+                        </div>
+                      ) : msg.messageType === "emoji" ? (
+                        <div className="text-4xl">{msg.message}</div>
+                      ) : (
+                        <div>{msg.message}</div>
+                      )}
+                      {/* Display reactions if any */}
+                      {msg.reactions && msg.reactions.length > 0 && (
+                        <div className="flex space-x-1 mt-1">
+                          {msg.reactions.map((reaction, i) => (
+                            <span
+                              key={i}
+                              className="bg-gray-600 rounded-full px-2 py-0.5 text-xs flex items-center"
+                            >
+                              {reaction.type === "like" && (
+                                <AiFillHeart
+                                  className="text-red-500 mr-1"
+                                  size={12}
+                                />
+                              )}
+                              {reaction.type === "love" && (
+                                <BiHappy
+                                  className="text-yellow-500 mr-1"
+                                  size={12}
+                                />
+                              )}
+                              {reaction.type === "sad" && (
+                                <BiSad
+                                  className="text-blue-400 mr-1"
+                                  size={12}
+                                />
+                              )}
+                              {reaction.type === "wow" && (
+                                <BiWinkSmile
+                                  className="text-green-400 mr-1"
+                                  size={12}
+                                />
+                              )}
+                              {reaction.type === "100" && (
+                                <span className="mr-1 text-xs">💯</span>
+                              )}
+                              {reaction.username}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div
+                        className={`text-xs mt-1 flex items-center justify-between ${isCurrentUser ? "text-blue-200" : "text-gray-400"}`}
+                      >
+                        {msg.pending ? (
+                          <span className="flex items-center">
+                            Sending...
+                            <div className="ml-1 w-2 h-2 rounded-full bg-blue-200 animate-pulse"></div>
+                          </span>
+                        ) : msg.failed ? (
+                          <span className="flex items-center">
+                            <span className="text-red-300 mr-2">Failed</span>
+                            {msg.messageType === "text" && (
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  sendMessage(e);
+                                }}
+                                className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-2 py-0.5 rounded"
+                              >
+                                Retry
+                              </button>
+                            )}
+                          </span>
+                        ) : (
+                          formatMessageTime(msg.createdAt)
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -565,6 +1110,73 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           <div className="flex items-center justify-center h-full text-gray-500">
             This is the beginning of your conversation with{" "}
             {otherUser.name || otherUser.username}
+          </div>
+        )}
+
+        {/* Forward message dialog */}
+        {forwardingMessage && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-gray-800 rounded-lg p-4 w-96">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium">Forward message</h3>
+                <button
+                  onClick={() => {
+                    setForwardingMessage(null);
+                  }}
+                  className="text-gray-400 hover:text-white"
+                >
+                  &times;
+                </button>
+              </div>
+              <div className="bg-gray-700 p-3 rounded mb-4">
+                <p className="text-sm text-gray-300">
+                  {forwardingMessage.messageType === "image"
+                    ? "Forward this image"
+                    : `"${forwardingMessage.message}"`}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Originally from {forwardingMessage.sender}
+                </p>
+              </div>
+              <div className="mb-4">
+                <p className="text-sm mb-2">Select conversation:</p>
+                <div className="max-h-40 overflow-y-auto">
+                  {/* This would be populated with your conversation list */}
+                  <p className="text-center text-gray-400 p-2">
+                    Forwarding functionality requires integration with your
+                    conversation list. Please connect this UI to your
+                    conversation selection logic.
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    setForwardingMessage(null);
+                  }}
+                  className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded mr-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    // Call the handleForwardMessage with target conversation details
+                    // This would be replaced with actual selected conversation data
+                    handleForwardMessage(
+                      "example-conversation-id",
+                      "example-user",
+                    );
+                    toast.info(
+                      "Forward functionality needs backend implementation",
+                    );
+                    setForwardingMessage(null);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded"
+                >
+                  Forward
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -585,8 +1197,37 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
             />
           </div>
         )}
+        {/* Reply UI */}
+        {replyingTo && (
+          <div className="px-4 pt-2 border-t border-gray-700 bg-gray-800 flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="border-l-2 border-blue-500 pl-2">
+                <p className="text-xs text-gray-400">
+                  Replying to {replyingTo.sender}
+                </p>
+                <p className="text-sm truncate text-gray-300 max-w-[350px]">
+                  {replyingTo.messageType === "image"
+                    ? "An image"
+                    : replyingTo.message}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setReplyingTo(null)}
+              className="text-gray-400 hover:text-gray-200 p-1"
+            >
+              &times;
+            </button>
+          </div>
+        )}
         <form
-          onSubmit={(e) => sendMessage(e)}
+          onSubmit={(e) => {
+            if (replyingTo) {
+              sendReply(e, replyingTo);
+            } else {
+              sendMessage(e);
+            }
+          }}
           className="p-4 border-t border-gray-700 flex items-center"
         >
           <button
