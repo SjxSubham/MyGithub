@@ -94,13 +94,35 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
       );
     };
 
+    // Handle socket reconnection and check for any pending operations
+    const handleReconnect = () => {
+      if (deletingMessageId) {
+        // Inform user that connection is restored and operation can continue
+        toast.success("Connection restored, resuming message operation");
+      }
+    };
+
     // Handle message deleted for everyone
     const handleMessageDeleted = (data) => {
+      if (!data || !data.messageId) {
+        console.error("Invalid message deletion data received:", data);
+        return;
+      }
+
       if (data.conversationId === activeChat._id) {
+        // Check if the message exists before showing notification
+        const messageExists = chatMessages.some(
+          (msg) => msg._id === data.messageId,
+        );
+
         setChatMessages((prev) =>
           prev.filter((msg) => msg._id !== data.messageId),
         );
-        toast.info("A message was deleted");
+
+        if (messageExists) {
+          const deletedBy = data.deletedBy || "Someone";
+          toast.info(`${deletedBy} deleted a message`);
+        }
       }
     };
 
@@ -142,14 +164,24 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
     socket.on("messageDelivered", handleMessageDelivered);
     socket.on("messageDeleted", handleMessageDeleted);
     socket.on("messageReaction", handleMessageReaction);
+    socket.on("connect", handleReconnect);
+    socket.on("disconnect", () => {
+      if (deletingMessageId) {
+        toast.warning(
+          "Connection lost while deleting a message. Will retry when connection is restored.",
+        );
+      }
+    });
 
     return () => {
       socket.off("receiveMessage", handleIncomingMessage);
       socket.off("messageDelivered", handleMessageDelivered);
       socket.off("messageDeleted", handleMessageDeleted);
       socket.off("messageReaction", handleMessageReaction);
+      socket.off("connect", handleReconnect);
+      socket.off("disconnect");
     };
-  }, [socket, activeChat, handleNewMessage, chatMessages]);
+  }, [socket, activeChat, handleNewMessage, chatMessages, deletingMessageId]);
 
   // Auto scroll to bottom when messages update
   useEffect(() => {
@@ -478,7 +510,23 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
 
   // Function to delete messages
   const deleteMessage = async (messageId, deleteType) => {
-    if (!messageId) return;
+    // Validate message ID and check if message exists
+    if (!messageId) {
+      toast.error("Cannot delete message: Invalid message ID");
+      return;
+    }
+
+    // Check if message exists in chat history
+    const messageExists = chatMessages.some((msg) => msg._id === messageId);
+    if (!messageExists) {
+      toast.error("Cannot delete message: Message not found");
+      return;
+    }
+
+    // Prevent deleting a message that's already being deleted
+    if (deletingMessageId === messageId) {
+      return;
+    }
 
     try {
       setDeletingMessageId(messageId);
@@ -493,6 +541,11 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
         credentials: "include",
       });
 
+      // Handle potential network errors or server timeouts
+      if (!response) {
+        throw new Error("Network error: No response from server");
+      }
+
       const data = await response.json();
 
       if (response.ok) {
@@ -503,10 +556,31 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           );
 
           // Notify other users via socket
-          socket.emit("deleteMessageForEveryone", {
-            messageId,
-            conversationId: activeChat._id,
-          });
+          if (socket && socket.connected) {
+            socket.emit("deleteMessageForEveryone", {
+              messageId,
+              conversationId: activeChat._id,
+              deletedBy: authUser.username,
+            });
+          } else {
+            console.warn(
+              "Socket not connected, couldn't notify other users about deletion",
+            );
+            toast.warning(
+              "Network issue: Other users will see this message disappear when you reconnect",
+            );
+
+            // Set up retry mechanism when socket reconnects
+            const retryEmit = () => {
+              socket.emit("deleteMessageForEveryone", {
+                messageId,
+                conversationId: activeChat._id,
+                deletedBy: authUser.username,
+              });
+              socket.off("connect", retryEmit); // Remove listener after retrying
+            };
+            socket.on("connect", retryEmit);
+          }
 
           toast.success("Message deleted for everyone");
         } else {
@@ -519,11 +593,39 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           toast.success("Message deleted for you");
         }
       } else {
-        toast.error(data.error || "Failed to delete message");
+        // Handle specific error cases
+        if (response.status === 403) {
+          toast.error("You don't have permission to delete this message");
+        } else if (response.status === 404) {
+          toast.error("Message not found or already deleted");
+          // Update UI to reflect the message is gone
+          setChatMessages((prev) =>
+            prev.filter((msg) => msg._id !== messageId),
+          );
+        } else if (response.status === 429) {
+          toast.error(
+            "Too many delete requests. Please try again in a moment.",
+          );
+        } else if (response.status >= 500) {
+          toast.error(
+            "Server error. Your message will be deleted when the server recovers.",
+          );
+          // Keep the message ID in a retry queue
+          const retryAfterDelay = () => {
+            setTimeout(() => {
+              deleteMessage(messageId, deleteType);
+            }, 5000); // Retry after 5 seconds
+          };
+          retryAfterDelay();
+        } else {
+          toast.error(data.error || "Failed to delete message");
+        }
       }
     } catch (error) {
       console.error("Error deleting message:", error);
-      toast.error("Something went wrong");
+      toast.error(
+        `Error deleting message: ${error.message || "Something went wrong"}`,
+      );
     } finally {
       setDeletingMessageId(null);
     }
@@ -816,6 +918,12 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                         <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
                         <span>Deleting message...</span>
                       </div>
+                      <div className="text-xs text-center mt-1">
+                        Please wait...{" "}
+                        {socket &&
+                          !socket.connected &&
+                          "(Reconnecting to server)"}
+                      </div>
                     </div>
                   ) : (
                     <div
@@ -880,10 +988,11 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                             <li>
                               <button
                                 onClick={() => {
-                                  deleteMessage(msg._id, "self");
                                   setActiveMessageOptions(null);
+                                  deleteMessage(msg._id, "self");
                                 }}
-                                className="flex items-center w-full px-3 py-2 text-left hover:bg-gray-700 rounded-md transition-colors"
+                                disabled={deletingMessageId === msg._id}
+                                className={`flex items-center w-full px-3 py-2 text-left hover:bg-gray-700 rounded-md transition-colors ${deletingMessageId === msg._id ? "opacity-50 cursor-not-allowed" : ""}`}
                               >
                                 <FaTrash className="mr-2" /> Delete for me
                               </button>
@@ -892,10 +1001,11 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
                               <li>
                                 <button
                                   onClick={() => {
-                                    deleteMessage(msg._id, "everyone");
                                     setActiveMessageOptions(null);
+                                    deleteMessage(msg._id, "everyone");
                                   }}
-                                  className="flex items-center w-full px-3 py-2 text-left hover:bg-gray-700 rounded-md transition-colors"
+                                  disabled={deletingMessageId === msg._id}
+                                  className={`flex items-center w-full px-3 py-2 text-left hover:bg-gray-700 rounded-md transition-colors ${deletingMessageId === msg._id ? "opacity-50 cursor-not-allowed" : ""}`}
                                 >
                                   <FaTrash className="mr-2" /> Delete for
                                   everyone
