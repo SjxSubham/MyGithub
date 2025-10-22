@@ -12,6 +12,8 @@ import authRoutes from "./routes/auth.route.js";
 import chatRoutes from "./routes/chat.route.js";
 import connectMongoDB from "./db/connectMongoDB.js";
 import path from "path";
+import nodeCron from "node-cron";
+import { pingServer } from "./utils/pingServer.js";
 
 dotenv.config();
 
@@ -45,6 +47,11 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/explore", exploreRoutes);
 app.use("/api/chat", chatRoutes);
+
+// Health check endpoint for keeping the server alive
+app.get("/api/health", (req, res) => {
+  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
 app.use(express.static(path.join(__dirname, "/frontend/dist")));
 app.get("*", (req, res) => {
@@ -200,7 +207,44 @@ io.on("connection", (socket) => {
   });
 });
 
+// Set up a cron job to ping the server every 14 minutes to prevent Render from sleeping
+const setupCronJob = () => {
+  // Get the deployment URL from environment or use localhost for development
+  const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
+  const pingUrl = `${appUrl}/api/health`;
+
+  console.log(
+    `Setting up cron job to ping ${pingUrl} every 14 minutes to prevent sleep`,
+  );
+
+  // Schedule the cron job to run every 14 minutes
+  // The "*/14 * * * *" format means: "At every 14th minute"
+  nodeCron.schedule("*/14 * * * *", async () => {
+    const timestamp = new Date().toISOString();
+    console.log(
+      `🔄 [${timestamp}] Running scheduled ping to keep server alive`,
+    );
+
+    try {
+      await pingServer(pingUrl);
+    } catch (error) {
+      console.error(`❌ Scheduled ping failed: ${error.message}`);
+    }
+  });
+
+  // Run an initial ping immediately on startup
+  setTimeout(async () => {
+    try {
+      console.log("🚀 Running initial ping on startup");
+      await pingServer(pingUrl);
+    } catch (error) {
+      console.error(`❌ Initial ping failed: ${error.message}`);
+    }
+  }, 5000); // Wait 5 seconds after server start
+};
+
 server.listen(PORT, () => {
   console.log(`Server started on http://localhost:${PORT}`);
   connectMongoDB();
+  setupCronJob();
 });
