@@ -60,7 +60,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
 
     // Handle incoming message from socket
     const handleIncomingMessage = (data) => {
-      console.log("Received message via socket:", data);
+      // console.log("Received message via socket:", data);
 
       if (data.conversationId === activeChat._id) {
         // Check if we already have a pending message with the same content
@@ -73,10 +73,10 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
             msg.messageType === data.messageType,
         );
 
-        console.log("Message has pending match:", hasPendingMatch);
+        // console.log("Message has pending match:", hasPendingMatch);
 
         if (!hasPendingMatch) {
-          console.log("Adding new message to chat:", data);
+          // console.log("Adding new message to chat:", data);
           setChatMessages((prev) => [...prev, data]);
         }
 
