@@ -601,7 +601,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
             ) : (
               <>
                 <BiImageAdd size={20} />
-                <span className="absolute -top-1 -right-1 text-xs bg-blue-500 text-white rounded-full px-1 animate-pulse">
+                <span className="absolute -top-1 -right-1 text-xs bg-blue-300 text-white rounded-full px-1 animate-pulse opacity-35">
                   2MB
                 </span>
               </>
@@ -633,7 +633,7 @@ const ChatWindow = ({ activeChat, authUser, socket, handleNewMessage }) => {
           />
           <button
             type="submit"
-            className="bg-blue-600 px-4 rounded-r-lg flex items-center justify-center hover:bg-blue-700 transition-colors"
+            className="bg-blue-600 p-2 rounded-r-lg flex items-center justify-center hover:bg-blue-700 transition-colors"
             disabled={!message.trim() || sendingMessage}
           >
             {sendingMessage ? (
