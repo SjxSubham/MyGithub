@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Loading from './components/Loading.jsx';
 import ErrorMessage from './components/ErrorMessage.jsx';
 import useGithubUser from './hooks/useGithubUser.js';
