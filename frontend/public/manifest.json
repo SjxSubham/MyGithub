@@ -10,13 +10,13 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/MyGithub(3).png",
+      "src": "https://github.com/user-attachments/assets/f10c2232-a24d-46e4-835c-277bfac5c848",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/MyGithub(1).png",
+      "src": "https://github.com/user-attachments/assets/f4392199-026a-4c7a-86cb-19a4a70419f2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
