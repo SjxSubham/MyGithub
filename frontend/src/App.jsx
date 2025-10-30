@@ -11,6 +11,7 @@ import Sidebar from "./components/Sidebar";
 import { useAuthContext } from "./context/Auth.Context";
 import Footer from "./components/Footer";
 import UserProfile from "./components/UserProfile.jsx";
+import PWAInstallPrompt from "./components/PWAInstallPrompt";
 
 function App() {
   const { authUser, loading } = useAuthContext();
@@ -52,6 +53,7 @@ function App() {
         <Toaster />
         <Footer />
       </div>
+      <PWAInstallPrompt />
     </div>
   );
 }

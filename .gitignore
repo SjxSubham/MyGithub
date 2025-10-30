@@ -14,7 +14,7 @@ dist-ssr
 *.local
 # all token key hidden
 #*****************
-.env 
+.env
 #*****************
 # Editor directories and files
 .vscode/*
@@ -26,3 +26,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Notification System Documentation
+NOTIFICATION_README.md
+NOTIFICATION_QUICKSTART.md
+NOTIFICATION_SYSTEM.md
+NOTIFICATION_ARCHITECTURE.md
+NOTIFICATION_CHECKLIST.md
+NOTIFICATION_IMPLEMENTATION_SUMMARY.md

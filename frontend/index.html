@@ -1,14 +1,44 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/MyGithub.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MyGithub</title>
-    
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+    <head>
+        <meta charset="UTF-8" />
+        <link rel="icon" type="image/svg+xml" href="/MyGithub.svg" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+        <!-- PWA Primary Meta Tags -->
+        <title>MyGitHub Chat</title>
+        <meta name="title" content="MyGitHub Chat" />
+        <meta
+            name="description"
+            content="Real-time chat application with GitHub integration and notification support"
+        />
+
+        <!-- PWA Manifest -->
+        <link rel="manifest" href="/manifest.json" />
+
+        <!-- Theme Color -->
+        <meta name="theme-color" content="#1f6feb" />
+        <meta
+            name="apple-mobile-web-app-status-bar-style"
+            content="black-translucent"
+        />
+
+        <!-- Apple Touch Icons -->
+        <link rel="apple-touch-icon" href="/logo.png" />
+
+        <!-- Apple Web App -->
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="MyGitHub" />
+
+        <!-- Mobile Web App -->
+        <meta name="mobile-web-app-capable" content="yes" />
+
+        <!-- Microsoft Tiles -->
+        <meta name="msapplication-TileColor" content="#1f6feb" />
+        <meta name="msapplication-TileImage" content="/logo.png" />
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.jsx"></script>
+    </body>
 </html>

@@ -2,38 +2,126 @@
 @tailwind components;
 @tailwind utilities;
 
-body{
-    background: linear-gradient(to bottom right, rgba(0,0,0,0.6), rgba(0,0,0,0.4)), url("/bg.png");
+body {
+    background:
+        linear-gradient(
+            to bottom right,
+            rgba(0, 0, 0, 0.6),
+            rgba(0, 0, 0, 0.4)
+        ),
+        url("/bg.png");
     background-repeat: no-repeat;
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
 }
 
-::-webkit-scrollbar{
+::-webkit-scrollbar {
     width: 8px;
 }
-::-webkit-scrollbar-track{
+::-webkit-scrollbar-track {
     background-color: #555;
 }
-::-webkit-scrollbar-thumb{
+::-webkit-scrollbar-thumb {
     background: #121212;
     border-radius: 5px;
-        
 }
-::-webkit-scrollbar-thumb:hover{
+::-webkit-scrollbar-thumb:hover {
     background: #242424;
 }
 .panel {
     @apply bg-[#161b22] border border-[#30363d] rounded-lg p-4;
-  }
-  .badge {
+}
+.badge {
     @apply bg-[#30363d] text-white text-[10px] tracking-wider uppercase px-2 py-0.5 rounded-full;
-  }
+}
 
-@layer components{
+@layer components {
     .bg-glass {
         @apply bg-clip-padding backdrop-filter backdrop-blur-md bg-opacity-10
-         hover:bg-gray-600/10 border border-gray-800 text-white
+         hover:bg-gray-600/10 border border-gray-800 text-white;
     }
+}
+
+/* Notification Animations */
+@keyframes slide-up {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slide-down {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes shake {
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+    10%,
+    30%,
+    50%,
+    70%,
+    90% {
+        transform: translateX(-5px);
+    }
+    20%,
+    40%,
+    60%,
+    80% {
+        transform: translateX(5px);
+    }
+}
+
+@keyframes pulse-ring {
+    0% {
+        transform: scale(0.8);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1.2);
+        opacity: 0;
+    }
+}
+
+.animate-slide-up {
+    animation: slide-up 0.3s ease-out;
+}
+
+.animate-slide-down {
+    animation: slide-down 0.3s ease-out;
+}
+
+.animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+}
+
+.animate-shake {
+    animation: shake 0.5s ease-in-out;
+}
+
+.animate-pulse-ring {
+    animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
