@@ -1,7 +1,7 @@
 {
-  "name": "MyGitHub Chat",
+  "name": "MyGitHub",
   "short_name": "MyGitHub",
-  "description": "Real-time chat application with GitHub integration",
+  "description": "Explore GitHub in a new way and chat support",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0d1117",
