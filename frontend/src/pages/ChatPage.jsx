@@ -107,7 +107,7 @@ const ChatPage = () => {
       navigator.serviceWorker
         .register("/service-worker.js")
         .then((registration) => {
-          console.log("Service Worker registered:", registration);
+          //console.log("Service Worker registered:", registration);
 
           // Handle service worker updates
           registration.addEventListener("updatefound", () => {
