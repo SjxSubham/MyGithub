@@ -115,8 +115,8 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: notificationData.body,
-    icon: notificationData.icon || "/logo.png",
-    badge: notificationData.badge || "/logo.png",
+    icon: notificationData.icon || "/MyGithub(3).svg",
+    badge: notificationData.badge || "/MyGithub(1).png",
     vibrate: [200, 100, 200],
     data: notificationData.data || {},
     requireInteraction: false,
@@ -226,7 +226,7 @@ self.addEventListener("notificationclose", (event) => {
 
 // Handle messages from the main app
 self.addEventListener("message", (event) => {
-  console.log("[Service Worker] Message received:", event.data);
+ // console.log("[Service Worker] Message received:", event.data);
 
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();

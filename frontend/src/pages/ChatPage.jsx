@@ -52,8 +52,8 @@ const ChatPage = () => {
   // Function to play notification sound
   const playNotificationSound = () => {
     try {
-      const audio = new Audio("/notification-sound.mp3");
-      audio.volume = 0.7;
+      const audio = new Audio("/sounds/notification-sound.mp3");
+      audio.volume = 0.5;
 
       audio.onerror = () => {
         // Fallback to Web Audio API
