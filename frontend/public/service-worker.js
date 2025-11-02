@@ -1,7 +1,7 @@
 // Service Worker for PWA Notifications and Offline Support
 /* global clients */
 
-const CACHE_NAME = "mygithub-v1";
+const CACHE_NAME = "mygithub-v2";
 const urlsToCache = ["/", "/index.html", "/logo.png", "/offline.html"];
 
 // Install event - cache essential resources
@@ -41,6 +41,19 @@ self.addEventListener("activate", (event) => {
 
 // Fetch event - serve from cache when offline
 self.addEventListener("fetch", (event) => {
+  // Skip caching for API requests and auth callbacks to avoid stale auth data
+  const url = new URL(event.request.url);
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.pathname.includes("/auth/") ||
+    url.pathname.includes("/login") ||
+    url.pathname.includes("/callback")
+  ) {
+    // Don't cache API requests, auth routes, or callbacks - always fetch from network
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((response) => {
       // Cache hit - return response

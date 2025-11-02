@@ -26,6 +26,81 @@ const ChatPage = () => {
     useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
+  // Function to fetch conversations
+  const fetchConversations = async () => {
+    if (!authUser) return;
+
+    try {
+      setLoading2(true);
+      const response = await fetch("/api/chat/conversations", {
+        credentials: "include",
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        setConversations(data);
+      } else {
+        console.error("Error fetching conversations:", data.error);
+      }
+    } catch (error) {
+      console.error("Failed to fetch conversations:", error);
+    } finally {
+      setLoading2(false);
+    }
+  };
+
+  // Function to play notification sound
+  const playNotificationSound = () => {
+    try {
+      const audio = new Audio("/notification-sound.mp3");
+      audio.volume = 0.7;
+
+      audio.onerror = () => {
+        // Fallback to Web Audio API
+        playFallbackSound();
+      };
+
+      audio.play().catch((error) => {
+        console.warn("Could not play notification sound:", error);
+        playFallbackSound();
+      });
+
+      // Vibrate on mobile
+      if ("vibrate" in navigator) {
+        navigator.vibrate([200, 100, 200]);
+      }
+    } catch (error) {
+      console.warn("Notification sound error:", error);
+    }
+  };
+
+  // Fallback sound using Web Audio API
+  const playFallbackSound = () => {
+    try {
+      const audioContext = new (window.AudioContext ||
+        window.webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = 800;
+      oscillator.type = "sine";
+
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.01,
+        audioContext.currentTime + 0.5,
+      );
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+    } catch (error) {
+      console.warn("Fallback sound error:", error);
+    }
+  };
+
   // Register service worker for PWA
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -256,86 +331,11 @@ const ChatPage = () => {
     }
   }, [socket, authUser, activeChat, conversations, showMessageNotification]);
 
-  // Function to fetch conversations
-  const fetchConversations = async () => {
-    if (!authUser) return;
-
-    try {
-      setLoading2(true);
-      const response = await fetch("/api/chat/conversations", {
-        credentials: "include",
-      });
-      const data = await response.json();
-
-      if (response.ok) {
-        setConversations(data);
-      } else {
-        console.error("Error fetching conversations:", data.error);
-      }
-    } catch (error) {
-      console.error("Failed to fetch conversations:", error);
-    } finally {
-      setLoading2(false);
-    }
-  };
-
   // Fetch conversations on component mount
   useEffect(() => {
     fetchConversations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser]);
-
-  // Function to play notification sound
-  const playNotificationSound = () => {
-    try {
-      const audio = new Audio("/notification-sound.mp3");
-      audio.volume = 0.7;
-
-      audio.onerror = () => {
-        // Fallback to Web Audio API
-        playFallbackSound();
-      };
-
-      audio.play().catch((error) => {
-        console.warn("Could not play notification sound:", error);
-        playFallbackSound();
-      });
-
-      // Vibrate on mobile
-      if ("vibrate" in navigator) {
-        navigator.vibrate([200, 100, 200]);
-      }
-    } catch (error) {
-      console.warn("Notification sound error:", error);
-    }
-  };
-
-  // Fallback sound using Web Audio API
-  const playFallbackSound = () => {
-    try {
-      const audioContext = new (window.AudioContext ||
-        window.webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      oscillator.frequency.value = 800;
-      oscillator.type = "sine";
-
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(
-        0.01,
-        audioContext.currentTime + 0.5,
-      );
-
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.5);
-    } catch (error) {
-      console.warn("Fallback sound error:", error);
-    }
-  };
 
   // Add new message to the appropriate conversation
   const handleNewMessage = (message) => {
