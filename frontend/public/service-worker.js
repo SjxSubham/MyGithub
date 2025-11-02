@@ -106,6 +106,10 @@ self.addEventListener("push", (event) => {
     badge: notificationData.badge || "/logo.png",
     vibrate: [200, 100, 200],
     data: notificationData.data || {},
+    requireInteraction: false,
+    silent: false,
+    tag: notificationData.tag || "default",
+    renotify: true,
     actions: notificationData.actions || [
       {
         action: "view",
@@ -119,7 +123,23 @@ self.addEventListener("push", (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(notificationData.title, options),
+    self.registration
+      .showNotification(notificationData.title, options)
+      .then(() => {
+        // Play notification sound by messaging all clients
+        return self.clients.matchAll({
+          type: "window",
+          includeUncontrolled: true,
+        });
+      })
+      .then((clientList) => {
+        clientList.forEach((client) => {
+          client.postMessage({
+            type: "play-notification-sound",
+            data: notificationData.data,
+          });
+        });
+      }),
   );
 });
 
@@ -209,7 +229,64 @@ self.addEventListener("message", (event) => {
 
   if (event.data && event.data.type === "SHOW_NOTIFICATION") {
     const { title, options } = event.data;
-    event.waitUntil(self.registration.showNotification(title, options));
+    event.waitUntil(
+      self.registration
+        .showNotification(title, options)
+        .then(() => {
+          // Notify clients to play sound
+          return self.clients.matchAll({
+            type: "window",
+            includeUncontrolled: true,
+          });
+        })
+        .then((clientList) => {
+          clientList.forEach((client) => {
+            client.postMessage({
+              type: "play-notification-sound",
+              data: options.data || {},
+            });
+          });
+        }),
+    );
+  }
+
+  // Handle sync request from client
+  if (event.data && event.data.type === "SYNC_MESSAGES") {
+    event.waitUntil(
+      syncPendingMessages()
+        .then(() => {
+          // Notify client that sync is complete
+          event.source.postMessage({
+            type: "sync-complete",
+            success: true,
+          });
+        })
+        .catch((error) => {
+          event.source.postMessage({
+            type: "sync-complete",
+            success: false,
+            error: error.message,
+          });
+        }),
+    );
+  }
+
+  // Handle fetch new messages request
+  if (event.data && event.data.type === "FETCH_NEW_MESSAGES") {
+    const { conversationId } = event.data;
+    event.waitUntil(
+      fetchNewMessages(conversationId)
+        .then((messages) => {
+          event.source.postMessage({
+            type: "new-messages-fetched",
+            conversationId,
+            messages,
+          });
+        })
+        .catch((error) => {
+          console.error("[Service Worker] Error fetching new messages:", error);
+        }),
+    );
   }
 });
 
@@ -219,21 +296,169 @@ self.addEventListener("sync", (event) => {
 
   if (event.tag === "sync-messages") {
     event.waitUntil(
-      // Sync pending messages
-      syncPendingMessages(),
+      syncPendingMessages()
+        .then(() => {
+          console.log("[Service Worker] Messages synced successfully");
+          // Notify all clients about successful sync
+          return self.clients.matchAll({ type: "window" });
+        })
+        .then((clientList) => {
+          clientList.forEach((client) => {
+            client.postMessage({
+              type: "messages-synced",
+              success: true,
+            });
+          });
+        })
+        .catch((error) => {
+          console.error("[Service Worker] Sync failed:", error);
+        }),
+    );
+  }
+
+  if (event.tag === "fetch-new-messages") {
+    event.waitUntil(
+      fetchAllNewMessages()
+        .then(() => {
+          // Notify clients about new messages
+          return self.clients.matchAll({ type: "window" });
+        })
+        .then((clientList) => {
+          clientList.forEach((client) => {
+            client.postMessage({
+              type: "new-messages-available",
+              success: true,
+            });
+          });
+        }),
     );
   }
 });
 
+// Function to sync pending messages
 async function syncPendingMessages() {
   try {
-    // Retrieve pending messages from IndexedDB or cache
-    // Send them to the server
-    // This is a placeholder for future implementation
-    console.log("[Service Worker] Syncing pending messages...");
+    // Open IndexedDB to get pending messages
+    const db = await openDatabase();
+    const pendingMessages = await getPendingMessages(db);
+
+    if (pendingMessages.length === 0) {
+      console.log("[Service Worker] No pending messages to sync");
+      return Promise.resolve();
+    }
+
+    console.log(
+      `[Service Worker] Syncing ${pendingMessages.length} pending messages...`,
+    );
+
+    // Send each pending message
+    const syncPromises = pendingMessages.map(async (msg) => {
+      try {
+        const response = await fetch("/api/chat/send", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify(msg.data),
+        });
+
+        if (response.ok) {
+          // Remove from pending queue
+          await removePendingMessage(db, msg.id);
+          return { success: true, id: msg.id };
+        } else {
+          return { success: false, id: msg.id };
+        }
+      } catch (error) {
+        console.error("[Service Worker] Failed to sync message:", error);
+        return { success: false, id: msg.id, error };
+      }
+    });
+
+    await Promise.all(syncPromises);
     return Promise.resolve();
   } catch (error) {
     console.error("[Service Worker] Sync failed:", error);
     return Promise.reject(error);
   }
+}
+
+// Function to fetch new messages for a conversation
+async function fetchNewMessages(conversationId) {
+  try {
+    const response = await fetch(`/api/chat/messages/${conversationId}`, {
+      credentials: "include",
+    });
+
+    if (response.ok) {
+      const messages = await response.json();
+      return messages;
+    } else {
+      throw new Error("Failed to fetch messages");
+    }
+  } catch (error) {
+    console.error("[Service Worker] Error fetching messages:", error);
+    throw error;
+  }
+}
+
+// Function to fetch all new messages when coming back online
+async function fetchAllNewMessages() {
+  try {
+    const response = await fetch("/api/chat/conversations", {
+      credentials: "include",
+    });
+
+    if (response.ok) {
+      return await response.json();
+    } else {
+      throw new Error("Failed to fetch conversations");
+    }
+  } catch (error) {
+    console.error("[Service Worker] Error fetching all messages:", error);
+    throw error;
+  }
+}
+
+// IndexedDB helper functions
+function openDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("ChatDB", 1);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains("pendingMessages")) {
+        db.createObjectStore("pendingMessages", {
+          keyPath: "id",
+          autoIncrement: true,
+        });
+      }
+    };
+  });
+}
+
+function getPendingMessages(db) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(["pendingMessages"], "readonly");
+    const store = transaction.objectStore("pendingMessages");
+    const request = store.getAll();
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function removePendingMessage(db, id) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(["pendingMessages"], "readwrite");
+    const store = transaction.objectStore("pendingMessages");
+    const request = store.delete(id);
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
 }

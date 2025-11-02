@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification Sound Generator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 10px 5px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .controls {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .control-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 600;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .value-display {
+            display: inline-block;
+            margin-left: 10px;
+            color: #667eea;
+            font-weight: bold;
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .info {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            display: none;
+        }
+        .waveform {
+            width: 100%;
+            height: 100px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            margin: 20px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+        .preset-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .preset-btn {
+            background: #f5f5f5;
+            color: #333;
+            border: 2px solid #e0e0e0;
+            padding: 12px;
+            font-size: 14px;
+        }
+        .preset-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 Notification Sound Generator</h1</h1>>
+        <p class="subtitle">Generate custom notification sounds for your PWA</p>
+
+        <div class="info">
+            <strong>💡 Quick</strong> Start:</strong> Choose a preset below or customize your own sound, then click "Generate & Download" to create your notification-sound.mp3 file.
+        </div>
+
+        <div class="preset-buttons">
+            <button class="preset-btn" onclick="applyPreset('gentle')">🌸 Gentle</button>
+            <button class="preset-btn" onclick="applyPreset('modern')">✨ Modern</button>
+            <button class="preset-btn" onclick="applyPreset('classic')">🔔 Classic</button>
+            <button class="preset-btn" onclick="applyPreset('urgent')">⚠️ Urgent</button>
+            <button class="preset-btn" onclick="applyPreset('pleasant')">😊 Pleasant</button>
+            <button class="preset-btn" onclick="applyPreset('soft')">🍃 Soft</button>
+        </div>
+
+        <div class="controls">
+            <h3>🎛️ Sound Parameters</h3>
+
+            <div class="control-group">
+                <label>Wave Type:</label>
+                <select id="waveType">
+                    <option value="sine">Sine (Smooth)</option>
+                    <option value="square">Square (Digital)</option>
+                    <option value="triangle">Triangle (Soft)</option>
+                    <option value="sawtooth">Sawtooth (Harsh)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>
+                    Frequency: <span class="value-display" id="freqDisplay">800 Hz</span>
+                </label>
+                <input type="range" id="frequency" min="200" max="2000" value="800" step="50">
+            </div>
+
+            <div class="control-group">
+                <label>
+                    Duration: <span class="value-display" id="durationDisplay">0.5 s</span>
+                </label>
+                <input type="range" id="duration" min="0.1" max="2.0" value="0.5" step="0.1">
+            </div>
+
+            <div class="control-group">
+                <label>
+                    Volume: <span class="value-display" id="volumeDisplay">0.7</span>
+                </label>
+                <input type="range" id="volume" min="0.1" max="1.0" value="0.7" step="0.1">
+            </div>
+
+            <div class="control-group">
+                <label>
+                    Attack Time: <span class="value-display" id="attackDisplay">0.01 s</span>
+                </label>
+                <input type="range" id="attack" min="0.01" max="0.5" value="0.01" step="0.01">
+            </div>
+
+            <div class="control-group">
+                <label>
+                    Release Time: <span class="value-display" id="releaseDisplay">0.1 s</span>
+                </label>
+                <input type="range" id="release" min="0.05" max="1.0" value="0.1" step="0.05">
+            </div>
+
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="twoTone"> Two-Tone Notification (ding-dong)
+                </label>
+            </div>
+        </div>
+
+        <div class="waveform">
+            <canvas id="waveformCanvas"></canvas>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <button onclick="previewSound()">▶️ Preview Sound</button>
+            <button onclick="generateAndDownload()">💾 Generate & Download</button>
+            <button onclick="generateBase64()">📋 Generate Base64 (for embedding)</button>
+        </div>
+
+        <div class="success" id="successMessage">
+            ✅ <strong>Success!</strong> Your notification sound has been generated and downloaded as <code>notification-sound.mp3</code>.
+            Place this file in your <code>frontend/public/</code> directory.
+        </div>
+
+        <div class="info">
+            <strong>📝 Instructions:</strong><br>
+            1. Customize the sound using the controls above<br>
+            2. Click "Preview Sound" to test it<br>
+            3. Click "Generate & Download" to save the file<br>
+            4. Move the downloaded file to <code>frontend/public/notification-sound.mp3</code><br>
+            5. Your PWA will now play this sound for notifications!
+        </div>
+    </div>
+
+    <script>
+        let audioContext;
+        let currentBuffer;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            updateDisplayValues();
+            drawWaveform();
+
+            // Add event listeners for real-time updates
+            document.querySelectorAll('input, select').forEach(input => {
+                input.addEventListener('change', function() {
+                    updateDisplayValues();
+                    drawWaveform();
+                });
+                input.addEventListener('input', function() {
+                    updateDisplayValues();
+                    drawWaveform();
+                });
+            });
+        });
+
+        function updateDisplayValues() {
+            document.getElementById('freqDisplay').textContent = document.getElementById('frequency').value + ' Hz';
+            document.getElementById('durationDisplay').textContent = document.getElementById('duration').value + ' s';
+            document.getElementById('volumeDisplay').textContent = document.getElementById('volume').value;
+            document.getElementById('attackDisplay').textContent = document.getElementById('attack').value + ' s';
+            document.getElementById('releaseDisplay').textContent = document.getElementById('release').value + ' s';
+        }
+
+        function getParameters() {
+            return {
+                waveType: document.getElementById('waveType').value,
+                frequency: parseFloat(document.getElementById('frequency').value),
+                duration: parseFloat(document.getElementById('duration').value),
+                volume: parseFloat(document.getElementById('volume').value),
+                attack: parseFloat(document.getElementById('attack').value),
+                release: parseFloat(document.getElementById('release').value),
+                twoTone: document.getElementById('twoTone').checked
+            };
+        }
+
+        function applyPreset(preset) {
+            const presets = {
+                gentle: { waveType: 'sine', frequency: 600, duration: 0.6, volume: 0.5, attack: 0.05, release: 0.2, twoTone: false },
+                modern: { waveType: 'sine', frequency: 1000, duration: 0.4, volume: 0.7, attack: 0.01, release: 0.1, twoTone: true },
+                classic: { waveType: 'sine', frequency: 800, duration: 0.5, volume: 0.7, attack: 0.01, release: 0.1, twoTone: false },
+                urgent: { waveType: 'square', frequency: 1200, duration: 0.3, volume: 0.8, attack: 0.01, release: 0.05, twoTone: true },
+                pleasant: { waveType: 'triangle', frequency: 700, duration: 0.7, volume: 0.6, attack: 0.05, release: 0.3, twoTone: false },
+                soft: { waveType: 'sine', frequency: 500, duration: 0.8, volume: 0.5, attack: 0.1, release: 0.4, twoTone: false }
+            };
+
+            const p = presets[preset];
+            document.getElementById('waveType').value = p.waveType;
+            document.getElementById('frequency').value = p.frequency;
+            document.getElementById('duration').value = p.duration;
+            document.getElementById('volume').value = p.volume;
+            document.getElementById('attack').value = p.attack;
+            document.getElementById('release').value = p.release;
+            document.getElementById('twoTone').checked = p.twoTone;
+
+            updateDisplayValues();
+            drawWaveform();
+        }
+
+        function drawWaveform() {
+            const canvas = document.getElementById('waveformCanvas');
+            const ctx = canvas.getContext('2d');
+            const params = getParameters();
+
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            const points = 500;
+            const centerY = canvas.height / 2;
+            const amplitude = centerY * 0.8;
+
+            for (let i = 0; i < points; i++) {
+                const x = (i / points) * canvas.width;
+                const t = (i / points) * params.duration;
+
+                // Envelope
+                let envelope = 1;
+                if (t < params.attack) {
+                    envelope = t / params.attack;
+                } else if (t > params.duration - params.release) {
+                    envelope = (params.duration - t) / params.release;
+                }
+
+                // Waveform
+                let value = 0;
+                const phase = (t * params.frequency * 2 * Math.PI) % (2 * Math.PI);
+
+                switch(params.waveType) {
+                    case 'sine':
+                        value = Math.sin(phase);
+                        break;
+                    case 'square':
+                        value = phase < Math.PI ? 1 : -1;
+                        break;
+                    case 'triangle':
+                        value = (2 / Math.PI) * Math.asin(Math.sin(phase));
+                        break;
+                    case 'sawtooth':
+                        value = 2 * ((phase / (2 * Math.PI)) % 1) - 1;
+                        break;
+                }
+
+                const y = centerY - (value * envelope * amplitude);
+
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+
+            ctx.stroke();
+        }
+
+        function createSound(params) {
+            const sampleRate = audioContext.sampleRate;
+            const numSamples = Math.floor(sampleRate * params.duration);
+            const buffer = audioContext.createBuffer(1, numSamples, sampleRate);
+            const data = buffer.getChannelData(0);
+
+            for (let i = 0; i < numSamples; i++) {
+                const t = i / sampleRate;
+
+                // Envelope
+                let envelope = 1;
+                if (t < params.attack) {
+                    envelope = t / params.attack;
+                } else if (t > params.duration - params.release) {
+                    envelope = (params.duration - t) / params.release;
+                }
+
+                // Base tone
+                let freq = params.frequency;
+                if (params.twoTone && t > params.duration / 2) {
+                    freq = params.frequency * 1.2; // Second tone slightly higher
+                }
+
+                const phase = 2 * Math.PI * freq * t;
+                let value = 0;
+
+                switch(params.waveType) {
+                    case 'sine':
+                        value = Math.sin(phase);
+                        break;
+                    case 'square':
+                        value = Math.sin(phase) > 0 ? 1 : -1;
+                        break;
+                    case 'triangle':
+                        value = (2 / Math.PI) * Math.asin(Math.sin(phase));
+                        break;
+                    case 'sawtooth':
+                        value = 2 * ((phase / (2 * Math.PI)) % 1) - 1;
+                        break;
+                }
+
+                data[i] = value * envelope * params.volume;
+            }
+
+            return buffer;
+        }
+
+        function previewSound() {
+            const params = getParameters();
+            const buffer = createSound(params);
+
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.destination);
+            source.start();
+
+            currentBuffer = buffer;
+        }
+
+        function bufferToWav(buffer) {
+            const numChannels = buffer.numberOfChannels;
+            const sampleRate = buffer.sampleRate;
+            const format = 1; // PCM
+            const bitDepth = 16;
+
+            const bytesPerSample = bitDepth / 8;
+            const blockAlign = numChannels * bytesPerSample;
+
+            const data = buffer.getChannelData(0);
+            const dataLength = data.length * bytesPerSample;
+            const bufferLength = 44 + dataLength;
+
+            const arrayBuffer = new ArrayBuffer(bufferLength);
+            const view = new DataView(arrayBuffer);
+
+            // WAV header
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + dataLength, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, format, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * blockAlign, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, bitDepth, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, dataLength, true);
+
+            // Write audio data
+            let offset = 44;
+            for (let i = 0; i < data.length; i++) {
+                const sample = Math.max(-1, Math.min(1, data[i]));
+                view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                offset += 2;
+            }
+
+            return arrayBuffer;
+        }
+
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+
+        function generateAndDownload() {
+            const params = getParameters();
+            const buffer = createSound(params);
+            const wav = bufferToWav(buffer);
+            const blob = new Blob([wav], { type: 'audio/wav' });
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'notification-sound.mp3';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            document.getElementById('successMessage').style.display = 'block';
+            setTimeout(() => {
+                document.getElementById('successMessage').style.display = 'none';
+            }, 5000);
+        }
+
+        function generateBase64() {
+            const params = getParameters();
+            const buffer = createSound(params);
+            const wav = bufferToWav(buffer);
+            const blob = new Blob([wav], { type: 'audio/wav' });
+
+            const reader = new FileReader();
+            reader.onload = function() {
+                const base64 = reader.result;
+                const textarea = document.createElement('textarea');
+                textarea.value = base64;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+
+                alert('Base64 audio data copied to clipboard! You can use it in your code as:\nconst audio = new Audio("' + base64.substring(0, 50) + '...");');
+            };
+            reader.readAsDataURL(blob);
+        }
+    </script>
+</body>
+</html>

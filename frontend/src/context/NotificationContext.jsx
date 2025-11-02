@@ -1,20 +1,28 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-import notificationService from '../services/notificationService';
-import { toast } from 'react-hot-toast';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import notificationService from "../services/notificationService";
+import { toast } from "react-hot-toast";
 
 const NotificationContext = createContext();
 
 export const useNotificationContext = () => {
   const context = useContext(NotificationContext);
   if (!context) {
-    throw new Error('useNotificationContext must be used within NotificationProvider');
+    throw new Error(
+      "useNotificationContext must be used within NotificationProvider",
+    );
   }
   return context;
 };
 
 export const NotificationProvider = ({ children }) => {
   const [notificationPermission, setNotificationPermission] = useState(
-    notificationService.permission
+    notificationService.permission,
   );
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -26,19 +34,29 @@ export const NotificationProvider = ({ children }) => {
     const checkPermission = () => {
       const permission = Notification.permission;
       setNotificationPermission(permission);
-      setIsNotificationEnabled(permission === 'granted');
+      setIsNotificationEnabled(permission === "granted");
     };
 
     checkPermission();
 
     // Listen for permission changes
-    if ('permissions' in navigator) {
-      navigator.permissions.query({ name: 'notifications' }).then((permissionStatus) => {
-        permissionStatus.onchange = () => {
-          checkPermission();
-        };
-      }).catch(() => {
-        // Permissions API not supported, that's okay
+    if ("permissions" in navigator) {
+      navigator.permissions
+        .query({ name: "notifications" })
+        .then((permissionStatus) => {
+          permissionStatus.onchange = () => {
+            checkPermission();
+          };
+        })
+        .catch(() => {
+          // Permissions API not supported, that's okay
+        });
+    }
+
+    // Register service worker and set it in notification service
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.ready.then((registration) => {
+        notificationService.setServiceWorkerRegistration(registration);
       });
     }
   }, []);
@@ -51,7 +69,7 @@ export const NotificationProvider = ({ children }) => {
       setIsNotificationEnabled(granted);
 
       if (granted) {
-        toast.success('Notifications enabled successfully!');
+        toast.success("Notifications enabled successfully!");
 
         // Process any pending notifications
         if (pendingNotifications.length > 0) {
@@ -61,87 +79,135 @@ export const NotificationProvider = ({ children }) => {
           setPendingNotifications([]);
         }
       } else {
-        toast.error('Notification permission denied');
+        toast.error("Notification permission denied");
       }
 
       return granted;
     } catch (error) {
-      console.error('Error requesting notification permission:', error);
-      toast.error('Failed to enable notifications');
+      console.error("Error requesting notification permission:", error);
+      toast.error("Failed to enable notifications");
       return false;
     }
   };
 
-  // Show notification for new message
-  const showMessageNotification = async (messageData, options = {}) => {
-    const {
-      showOnlyWhenHidden = true,
-      playSound = soundEnabled,
-      force = false,
-    } = options;
-
-    // Check if we should show notification
-    if (!force && !notificationService.shouldShowNotification({
-      onlyWhenHidden: showOnlyWhenHidden
-    })) {
-      return;
-    }
-
-    // If no permission yet, queue the notification
-    if (notificationPermission === 'default') {
-      setPendingNotifications((prev) => [...prev, { type: 'message', data: messageData }]);
-      return;
-    }
-
-    // If permission denied, don't show
-    if (notificationPermission === 'denied') {
-      return;
-    }
+  // Play notification sound
+  const playNotificationSound = useCallback(() => {
+    if (!soundEnabled) return;
 
     try {
-      await notificationService.showMessageNotification(messageData);
+      notificationService.playNotificationSound();
+    } catch (error) {
+      console.warn("Error playing notification sound:", error);
+    }
+  }, [soundEnabled]);
 
-      // Play sound if enabled
-      if (playSound) {
-        notificationService.playNotificationSound();
+  // Show notification for new message
+  const showMessageNotification = useCallback(
+    async (messageData, options = {}) => {
+      const {
+        showOnlyWhenHidden = true,
+        playSound = soundEnabled,
+        force = false,
+      } = options;
+
+      // Check if we should show notification
+      if (
+        !force &&
+        !notificationService.shouldShowNotification({
+          onlyWhenHidden: showOnlyWhenHidden,
+        })
+      ) {
+        // Still play sound even if notification not shown
+        if (playSound && !document.hidden) {
+          playNotificationSound();
+        }
+        return;
       }
 
-      // Increment unread count
-      setUnreadCount((prev) => prev + 1);
-    } catch (error) {
-      console.error('Error showing message notification:', error);
-    }
-  };
+      // If no permission yet, queue the notification
+      if (notificationPermission === "default") {
+        setPendingNotifications((prev) => [
+          ...prev,
+          { type: "message", data: messageData },
+        ]);
+        // Still play sound
+        if (playSound) {
+          playNotificationSound();
+        }
+        return;
+      }
+
+      // If permission denied, just play sound
+      if (notificationPermission === "denied") {
+        if (playSound) {
+          playNotificationSound();
+        }
+        return;
+      }
+
+      try {
+        await notificationService.showMessageNotification(messageData);
+
+        // Play sound if enabled
+        if (playSound) {
+          playNotificationSound();
+        }
+
+        // Increment unread count
+        setUnreadCount((prev) => prev + 1);
+      } catch (error) {
+        console.error("Error showing message notification:", error);
+        // Still try to play sound
+        if (playSound) {
+          playNotificationSound();
+        }
+      }
+    },
+    [notificationPermission, soundEnabled, playNotificationSound],
+  );
 
   // Show notification for multiple messages
-  const showMultipleMessagesNotification = async (count, latestSender, options = {}) => {
-    const {
-      showOnlyWhenHidden = true,
-      playSound = soundEnabled,
-    } = options;
+  const showMultipleMessagesNotification = useCallback(
+    async (count, latestSender, options = {}) => {
+      const { showOnlyWhenHidden = true, playSound = soundEnabled } = options;
 
-    if (!notificationService.shouldShowNotification({
-      onlyWhenHidden: showOnlyWhenHidden
-    })) {
-      return;
-    }
-
-    try {
-      await notificationService.showMultipleMessagesNotification(count, latestSender);
-
-      if (playSound) {
-        notificationService.playNotificationSound();
+      if (
+        !notificationService.shouldShowNotification({
+          onlyWhenHidden: showOnlyWhenHidden,
+        })
+      ) {
+        // Still play sound
+        if (playSound) {
+          playNotificationSound();
+        }
+        return;
       }
 
-      setUnreadCount((prev) => prev + count);
-    } catch (error) {
-      console.error('Error showing multiple messages notification:', error);
-    }
-  };
+      try {
+        await notificationService.showMultipleMessagesNotification(
+          count,
+          latestSender,
+        );
+
+        if (playSound) {
+          playNotificationSound();
+        }
+
+        setUnreadCount((prev) => prev + count);
+      } catch (error) {
+        console.error("Error showing multiple messages notification:", error);
+        // Still play sound on error
+        if (playSound) {
+          playNotificationSound();
+        }
+      }
+    },
+    [soundEnabled, playNotificationSound],
+  );
 
   // Generic show notification
   const showNotification = async (notification) => {
-    if (notification.type === 'message') {
+    if (notification.type === "message") {
       await showMessageNotification(notification.data);
     }
   };
@@ -152,7 +218,7 @@ export const NotificationProvider = ({ children }) => {
       await notificationService.closeAllNotifications();
       setUnreadCount(0);
     } catch (error) {
-      console.error('Error clearing notifications:', error);
+      console.error("Error clearing notifications:", error);
     }
   };
 
@@ -161,7 +227,7 @@ export const NotificationProvider = ({ children }) => {
     try {
       await notificationService.closeNotificationsByTag(tag);
     } catch (error) {
-      console.error('Error clearing notifications by tag:', error);
+      console.error("Error clearing notifications by tag:", error);
     }
   };
 
@@ -169,19 +235,21 @@ export const NotificationProvider = ({ children }) => {
   const toggleSound = () => {
     setSoundEnabled((prev) => !prev);
     const newState = !soundEnabled;
-    localStorage.setItem('notificationSound', JSON.stringify(newState));
-    toast.success(newState ? 'Notification sound enabled' : 'Notification sound disabled');
+    localStorage.setItem("notificationSound", JSON.stringify(newState));
+    toast.success(
+      newState ? "Notification sound enabled" : "Notification sound disabled",
+    );
   };
 
   // Load sound preference from localStorage
   useEffect(() => {
     try {
-      const savedSoundPref = localStorage.getItem('notificationSound');
+      const savedSoundPref = localStorage.getItem("notificationSound");
       if (savedSoundPref !== null) {
         setSoundEnabled(JSON.parse(savedSoundPref));
       }
     } catch (error) {
-      console.error('Error loading sound preference:', error);
+      console.error("Error loading sound preference:", error);
     }
   }, []);
 
@@ -193,9 +261,9 @@ export const NotificationProvider = ({ children }) => {
       }
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
@@ -210,6 +278,7 @@ export const NotificationProvider = ({ children }) => {
     clearAllNotifications,
     clearNotificationsByTag,
     toggleSound,
+    playNotificationSound,
     isSupported: notificationService.isNotificationSupported(),
   };
 
