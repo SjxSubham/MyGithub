@@ -29,7 +29,6 @@ const ChatPage = () => {
   // Function to fetch conversations
   const fetchConversations = async () => {
     if (!authUser) return;
-
     try {
       setLoading2(true);
       const response = await fetch("/api/chat/conversations", {
@@ -48,8 +47,10 @@ const ChatPage = () => {
       setLoading2(false);
     }
   };
+  
+  
 
-  // Function to play notification sound
+  // Function to play notification
   const playNotificationSound = () => {
     try {
       const audio = new Audio("/sounds/notification-sound.mp3");
